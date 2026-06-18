@@ -1,0 +1,207 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum SourceType {
+  DEMO
+  MANUAL
+  CSV_IMPORT
+  REAL_API
+}
+
+enum Platform {
+  ALL
+  YOUTUBE
+  TIKTOK
+  INSTAGRAM
+  FACEBOOK
+}
+
+enum ContentStatus {
+  DRAFT
+  READY
+  SCHEDULED
+  PUBLISHED
+  FAILED
+  PAUSED
+}
+
+enum PerformanceLevel {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum PriorityLevel {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum RecommendationType {
+  NICHE
+  CAMPAIGN
+  CONTENT
+  PUBLISHING
+  WARNING
+  GROWTH
+}
+
+enum PublishingContentType {
+  CLIP
+  IMAGE
+  STORY
+  SHORTS
+  REELS
+  POST
+}
+
+model Category {
+  id            String              @id @default(cuid())
+  name          String
+  slug          String              @unique
+  description   String?
+  isActive      Boolean             @default(true)
+  sourceType    SourceType          @default(DEMO)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  campaigns     Campaign[]
+  opportunities AiClipOpportunity[]
+
+  @@index([isActive])
+  @@index([sourceType])
+}
+
+model Campaign {
+  id                  String               @id @default(cuid())
+  name                String
+  slug                String               @unique
+  description         String?
+  platform            Platform             @default(ALL)
+  status              ContentStatus        @default(DRAFT)
+  categoryId          String?
+  startDate           DateTime?
+  endDate             DateTime?
+  sourceType          SourceType           @default(DEMO)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  category            Category?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  opportunities       AiClipOpportunity[]
+  publishingSchedules PublishingSchedule[]
+
+  @@index([categoryId])
+  @@index([platform])
+  @@index([status])
+  @@index([sourceType])
+}
+
+model AiClipOpportunity {
+  id                  String               @id @default(cuid())
+  title               String
+  slug                String               @unique
+  description         String?
+  niche               String
+  keyword             String
+  platform            Platform
+  status              ContentStatus        @default(DRAFT)
+  performanceLevel    PerformanceLevel
+  opportunityScore    Int
+  trendScore          Int
+  competitionScore    Int
+  viralPotentialScore Int
+  aiRecommendation    String
+  hookIdeas           Json
+  contentAngles       Json
+  thumbnailIdeas      Json?
+  sourceUrl           String?
+  sourceType          SourceType           @default(DEMO)
+  isSaved             Boolean              @default(false)
+  savedAt             DateTime?
+  categoryId          String?
+  campaignId          String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  category            Category?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  campaign            Campaign?            @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  publishingSchedules PublishingSchedule[]
+
+  @@index([categoryId])
+  @@index([campaignId])
+  @@index([platform])
+  @@index([status])
+  @@index([performanceLevel])
+  @@index([isSaved])
+  @@index([opportunityScore])
+  @@index([createdAt])
+  @@index([sourceType])
+}
+
+model DashboardRecommendation {
+  id                 String             @id @default(cuid())
+  title              String
+  summary            String
+  priority           PriorityLevel
+  recommendationType RecommendationType
+  actionLabel        String?
+  actionTarget       String?
+  sourceType         SourceType         @default(DEMO)
+  isRead             Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([priority])
+  @@index([recommendationType])
+  @@index([isRead])
+  @@index([sourceType])
+  @@index([createdAt])
+}
+
+model PublishingSchedule {
+  id            String                @id @default(cuid())
+  title         String
+  contentType   PublishingContentType
+  platform      Platform
+  status        ContentStatus         @default(DRAFT)
+  scheduledAt   DateTime
+  publishedAt   DateTime?
+  campaignId    String?
+  opportunityId String?
+  sourceType    SourceType            @default(DEMO)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  campaign      Campaign?             @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  opportunity   AiClipOpportunity?    @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+
+  @@index([campaignId])
+  @@index([opportunityId])
+  @@index([platform])
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([sourceType])
+}
+
+model CompetitorProfile {
+  id             String     @id @default(cuid())
+  name           String
+  platform       Platform
+  handle         String?
+  profileUrl     String?
+  niche          String
+  followers      Int?
+  avgViews       Int?
+  avgEngagement  Float?
+  contentPattern Json?
+  strengths      Json?
+  weaknesses     Json?
+  sourceType     SourceType @default(DEMO)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([platform])
+  @@index([niche])
+  @@index([sourceType])
+}
