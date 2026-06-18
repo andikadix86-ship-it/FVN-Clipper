@@ -64,8 +64,10 @@ export interface ContentItem {
   category: string;
   platform: string;
   campaign: string;
-  status: "Draft" | "Ready" | "Scheduled" | "Published" | "Archived";
+  status: "Draft" | "Ready" | "Scheduled" | "Published" | "Failed" | "Archived";
   metric: string;
+  date?: string;
+  performance?: "High" | "Medium" | "Low";
 }
 
 export interface Account {

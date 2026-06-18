@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Bell,
   CheckCircle2,
@@ -53,6 +53,65 @@ export function AppShell({ children, onAction }: { children: React.ReactNode; on
 }
 
 export function AppSidebar({ activePage, activePath, collapsed, mobileOpen, onNavigate, onCollapse, onCloseMobile }: SidebarProps) {
+  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>(() =>
+    navItems.reduce<Record<string, boolean>>((state, item) => {
+      state[item.id] = item.id === activePage;
+      return state;
+    }, {})
+  );
+
+  useEffect(() => {
+    setExpandedMenus((current) => ({ ...current, [activePage]: true }));
+  }, [activePage]);
+
+  const toggleMenu = (menuKey: string) => {
+    setExpandedMenus((current) => ({ ...current, [menuKey]: !current[menuKey] }));
+  };
+
+  const openParent = (path: string, menuKey: string) => {
+    setExpandedMenus((current) => ({ ...current, [menuKey]: true }));
+    onNavigate(path);
+  };
+
+  const renderNavItem = (item: (typeof navItems)[number]) => {
+    const Icon = item.icon;
+    const isActive = activePage === item.id;
+    const isExpanded = Boolean(expandedMenus[item.id]);
+
+    return (
+      <div className="nav-block" key={item.id}>
+        <div className={`nav-row ${isActive ? "active" : ""}`}>
+          <button className={`nav-item ${isActive ? "active" : ""}`} type="button" onClick={() => openParent(item.path, item.id)}>
+            <div className={`nav-icon nav-icon-${item.id}`} aria-hidden="true">
+              <Icon size={18} />
+            </div>
+            {!collapsed && <span>{item.label}</span>}
+          </button>
+          {!collapsed && (
+            <button
+              className={`nav-toggle ${isExpanded ? "open" : ""}`}
+              type="button"
+              aria-expanded={isExpanded}
+              aria-label={isExpanded ? "Collapse submenu" : "Expand submenu"}
+              onClick={() => toggleMenu(item.id)}
+            >
+              <ChevronDown size={16} />
+            </button>
+          )}
+        </div>
+        {!collapsed && isExpanded && (
+          <div className="submenu">
+            {item.submenu.map((sub) => (
+              <button className={activePath === sub.path ? "active" : ""} type="button" onClick={() => onNavigate(sub.path)} key={sub.path}>
+                {sub.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <>
       <button className="mobile-menu" type="button" onClick={onCloseMobile} aria-label="Toggle sidebar">
@@ -74,55 +133,9 @@ export function AppSidebar({ activePage, activePath, collapsed, mobileOpen, onNa
 
         <nav className="sidebar-nav" aria-label="Main menu">
           <p className="sidebar-group">AI Workflow</p>
-          {navItems.filter((item) => item.id !== "settings").map((item) => {
-            const Icon = item.icon;
-            const isActive = activePage === item.id;
-            return (
-              <div className="nav-block" key={item.id}>
-                <button className={`nav-item ${isActive ? "active" : ""}`} type="button" onClick={() => onNavigate(item.path)}>
-                  <div className={`nav-icon nav-icon-${item.id}`} aria-hidden="true">
-                    <Icon size={18} />
-                  </div>
-                  {!collapsed && <span>{item.label}</span>}
-                  {!collapsed && isActive && <ChevronDown size={16} />}
-                </button>
-                {!collapsed && isActive && (
-                  <div className="submenu">
-                    {item.submenu.map((sub) => (
-                      <button className={activePath === sub.path ? "active" : ""} type="button" onClick={() => onNavigate(sub.path)} key={sub.path}>
-                        {sub.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {navItems.filter((item) => item.id !== "settings").map(renderNavItem)}
           <p className="sidebar-group settings-group">Settings</p>
-          {navItems.filter((item) => item.id === "settings").map((item) => {
-            const Icon = item.icon;
-            const isActive = activePage === item.id;
-            return (
-              <div className="nav-block" key={item.id}>
-                <button className={`nav-item ${isActive ? "active" : ""}`} type="button" onClick={() => onNavigate(item.path)}>
-                  <div className={`nav-icon nav-icon-${item.id}`} aria-hidden="true">
-                    <Icon size={18} />
-                  </div>
-                  {!collapsed && <span>{item.label}</span>}
-                  {!collapsed && isActive && <ChevronDown size={16} />}
-                </button>
-                {!collapsed && isActive && (
-                  <div className="submenu">
-                    {item.submenu.map((sub) => (
-                      <button className={activePath === sub.path ? "active" : ""} type="button" onClick={() => onNavigate(sub.path)} key={sub.path}>
-                        {sub.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {navItems.filter((item) => item.id === "settings").map(renderNavItem)}
         </nav>
 
         {!collapsed && (
@@ -260,6 +273,8 @@ export function ScoreBadge({ score, label }: { score: number; label?: string }) 
 }
 
 export function FilterBar({ filters }: { filters: string[] }) {
+  const [activeFilter, setActiveFilter] = useState(filters[0] ?? "Demo filters");
+
   return (
     <div className="filter-bar">
       <div className="filter-label">
@@ -267,7 +282,7 @@ export function FilterBar({ filters }: { filters: string[] }) {
         <span>Demo filters</span>
       </div>
       {filters.map((filter) => (
-        <button type="button" className="filter-chip" key={filter}>
+        <button type="button" className={`filter-chip ${activeFilter === filter ? "active" : ""}`} onClick={() => setActiveFilter(filter)} key={filter}>
           {filter}
           <ChevronDown size={14} />
         </button>
@@ -427,7 +442,7 @@ export function ComplianceChecklist() {
 }
 
 export function ContentCard({ item, onArchive, onSchedule }: { item: ContentItem; onArchive?: (item: ContentItem) => void; onSchedule?: (item: ContentItem) => void }) {
-  const tone = item.status === "Published" ? "green" : item.status === "Scheduled" ? "blue" : item.status === "Ready" ? "cyan" : item.status === "Archived" ? "slate" : "amber";
+  const tone = item.status === "Published" ? "green" : item.status === "Scheduled" ? "blue" : item.status === "Ready" ? "cyan" : item.status === "Failed" ? "red" : item.status === "Archived" ? "slate" : "amber";
   return (
     <article className="content-card">
       <div className="content-preview">

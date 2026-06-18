@@ -34,6 +34,7 @@ import {
   navItems,
   niches,
   opportunities,
+  recommendations,
   stats
 } from "./data/ai-clipper-demo";
 import { aiProviderEnvStatus, environmentStatus, featureFlagEnvStatus, socialIntegrationEnvStatus } from "./env";
@@ -48,6 +49,31 @@ const CAMPAIGNS_KEY = "fvn-campaigns";
 const SCHEDULES_KEY = "fvn-schedules";
 const ACCOUNTS_KEY = "fvn-accounts";
 const APPROVAL_STATUS_KEY = "fvn-approval-status";
+
+type PlatformFilter = "All" | "YouTube" | "TikTok" | "Instagram" | "Facebook";
+type StatusFilter = "All" | ContentItem["status"];
+type PerformanceFilter = "All" | "High" | "Medium" | "Low";
+type ViewMode = "grid" | "list";
+
+interface DemoFilterState {
+  keyword: string;
+  category: string;
+  platform: PlatformFilter;
+  status: StatusFilter;
+  date: string;
+  performance: PerformanceFilter;
+  campaign: string;
+}
+
+const defaultDemoFilters: DemoFilterState = {
+  keyword: "",
+  category: "Demo Data",
+  platform: "All",
+  status: "All",
+  date: "",
+  performance: "All",
+  campaign: "All"
+};
 
 export function App() {
   const initialRoute = getRouteFromPath(window.location.pathname);
@@ -167,7 +193,9 @@ export function App() {
           platform: selectedSource?.platform ?? "TikTok",
           campaign: "Demo Data",
           status: "Ready",
-          metric: `${clip.viralScore} viral score`
+          metric: `${clip.viralScore} viral score`,
+          date: "2026-06-18",
+          performance: clip.viralScore >= 88 ? "High" : "Medium"
         },
         ...current
       ];
@@ -309,7 +337,7 @@ export function App() {
         <AppHeader title={activeNav.label} path={activePath} onOpenMobile={() => setMobileOpen(true)} onAction={showToast} onCreateSelect={handleCreateSelect} />
         <main className="content-layout">
           <section className="page-content">
-            {activePage !== "dashboard" && <ActiveSubmenuBar items={activeNav.submenu} activePath={activePath} onNavigate={navigate} />}
+            <ActiveSubmenuBar items={activeNav.submenu} activePath={activePath} onNavigate={navigate} />
             <PageRouter
               activePage={activePage}
               activeSub={activeSub}
@@ -467,11 +495,12 @@ function PageRouter({
       return <Settings activeSub={activeSub} />;
     case "dashboard":
     default:
-      return <Dashboard campaigns={campaignList} opportunities={opportunityList} schedules={scheduleList} onAnalyze={onAnalyze} onClip={onClip} onNavigate={onNavigate} onSave={onSaveOpportunity} />;
+      return <Dashboard activeSub={activeSub} campaigns={campaignList} opportunities={opportunityList} schedules={scheduleList} onAnalyze={onAnalyze} onClip={onClip} onNavigate={onNavigate} onSave={onSaveOpportunity} />;
   }
 }
 
 function Dashboard({
+  activeSub,
   campaigns,
   opportunities,
   schedules,
@@ -480,6 +509,7 @@ function Dashboard({
   onNavigate,
   onSave
 }: {
+  activeSub: SubNavItem;
   campaigns: Campaign[];
   opportunities: VideoOpportunity[];
   schedules: ScheduleItem[];
@@ -488,6 +518,84 @@ function Dashboard({
   onNavigate: (path: string) => void;
   onSave: (item: VideoOpportunity) => void;
 }) {
+  if (activeSub.key === "ai-recommendation-today") {
+    return (
+      <>
+        <DashboardHero />
+        <StatsGrid />
+        <div className="section-grid two">
+          <section className="section-card">
+            <SectionTitle title="AI Recommendation Today" action="Open AI Advisor" onAction={() => onNavigate("/ai-clip-intelligence/ai-advisor")} />
+            <div className="recommendation-panel">
+              {recommendations.map((item) => (
+                <article className="recommendation-row" key={item.title}>
+                  <StatusBadge label={item.status} tone={item.status === "Demo Data" ? "blue" : "amber"} />
+                  <div>
+                    <small>{item.action}</small>
+                    <strong>{item.title}</strong>
+                    <span>{item.description}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+          <section className="section-card">
+            <SectionTitle title="Recommended Opportunities" action="View Scanner" onAction={() => onNavigate("/ai-clip-intelligence/opportunity-scanner")} />
+            <div className="top-clip-list">
+              {opportunities.slice(0, 5).map((item, index) => (
+                <TopClipRow item={item} index={index + 1} onClip={onClip} key={item.id} />
+              ))}
+            </div>
+          </section>
+        </div>
+      </>
+    );
+  }
+
+  if (activeSub.key === "campaign-overview") {
+    return (
+      <>
+        <DashboardHero />
+        <StatsGrid />
+        <section className="section-card">
+          <SectionTitle title="Campaign Overview" action="View All Campaigns" onAction={() => onNavigate("/campaign-clipper/library")} />
+          <div className="campaign-grid">
+            {campaigns.map((campaign) => (
+              <CampaignCard campaign={campaign} key={campaign.name} />
+            ))}
+          </div>
+        </section>
+        <div className="section-grid two">
+          <InfoPanel title="Campaign Signals" items={["Active demo campaigns", "Compliance warnings", "Draft campaign queue", "Ready for AI review"]} />
+          <section className="section-card">
+            <SectionTitle title="Campaign Performance Preview" action="Analytics" onAction={() => onNavigate("/analytics/campaign")} />
+            <AnalyticsChart variant="bar" />
+          </section>
+        </div>
+      </>
+    );
+  }
+
+  if (activeSub.key === "publishing-calendar-preview") {
+    return (
+      <>
+        <DashboardHero />
+        <StatsGrid />
+        <section className="section-card">
+          <SectionTitle title="Publishing Calendar Preview" action="Open Calendar" onAction={() => onNavigate("/scheduler/publishing-calendar")} />
+          <CalendarPreview schedules={schedules} />
+        </section>
+        <div className="section-grid two">
+          <section className="section-card">
+            <SectionTitle title="Upcoming Schedule" action="Content Queue" onAction={() => onNavigate("/scheduler/content-queue")} />
+            <DashboardSchedule schedules={schedules} />
+          </section>
+          <InfoPanel title="Calendar Status" items={["Demo schedule data", "TikTok slot ready", "YouTube slot ready", "Manual approval available"]} />
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <DashboardHero />
@@ -626,8 +734,6 @@ function AIClipIntelligence({
   onRunAIScan: () => void;
   onSave: (item: VideoOpportunity) => void;
 }) {
-  const detailItems = getAIItems(activeSub.key);
-  const tableItems = activeSub.key === "saved-opportunities" ? savedOpportunities : opportunities;
   return (
     <>
       <PageHeader
@@ -639,20 +745,122 @@ function AIClipIntelligence({
       <SearchPanel title="Search keyword" button={isScanning ? "Scanning..." : "AI Scan"} placeholder="Try: AI tools, finance hooks, Islamic productivity..." onAction={onRunAIScan} />
       <FilterBar filters={["Platform", "Niche", "Score", "Period", "Search"]} />
       <StatsGrid />
-      <div className="section-grid three">
-        <InfoPanel title={activeSub.label} items={detailItems} />
-        <InfoPanel title="AI Scan Summary" items={[`Last scanned: ${lastScanned}`, ...scanSummary]} />
-        <InfoPanel title="Demo Data Status" items={["Demo Data", "Ready", "Not Connected API", "Saved Opportunities"]} />
-      </div>
-      <section className="section-card">
-        <SectionTitle title={activeSub.key === "saved-opportunities" ? "Saved Opportunities" : "Top 20 Opportunities"} action="View Saved" onAction={() => onNavigate("/ai-clip-intelligence/saved-opportunities")} />
-        {tableItems.length === 0 ? (
-          <EmptyState title="No saved opportunities yet" description="Click Save on any opportunity to store it here as Demo Data." />
-        ) : (
-          <VideoOpportunityTable items={tableItems} onAnalyze={onAnalyze} onClip={onClip} onSave={onSave} />
-        )}
-      </section>
+      <AIClipIntelligenceSubPage
+        activeSub={activeSub}
+        lastScanned={lastScanned}
+        opportunities={opportunities}
+        savedOpportunities={savedOpportunities}
+        scanSummary={scanSummary}
+        onAnalyze={onAnalyze}
+        onClip={onClip}
+        onNavigate={onNavigate}
+        onSave={onSave}
+      />
     </>
+  );
+}
+
+function AIClipIntelligenceSubPage({
+  activeSub,
+  lastScanned,
+  opportunities,
+  savedOpportunities,
+  scanSummary,
+  onAnalyze,
+  onClip,
+  onNavigate,
+  onSave
+}: {
+  activeSub: SubNavItem;
+  lastScanned: string;
+  opportunities: VideoOpportunity[];
+  savedOpportunities: VideoOpportunity[];
+  scanSummary: string[];
+  onAnalyze: (item: VideoOpportunity) => void;
+  onClip: (item: VideoOpportunity) => void;
+  onNavigate: (path: string) => void;
+  onSave: (item: VideoOpportunity) => void;
+}) {
+  if (activeSub.key === "trend-discovery") {
+    return (
+      <div className="section-grid two">
+        <InfoPanel title="Trend Discovery Signals" items={getAIItems(activeSub.key)} />
+        <section className="section-card">
+          <SectionTitle title="Fast Rising Demo Topics" action="Open Scanner" onAction={() => onNavigate("/ai-clip-intelligence/opportunity-scanner")} />
+          <div className="top-clip-list">
+            {opportunities.slice(0, 6).map((item, index) => (
+              <TopClipRow item={item} index={index + 1} onClip={onClip} key={item.id} />
+            ))}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  if (activeSub.key === "niche-explorer") {
+    return (
+      <div className="section-grid two">
+        <InfoPanel title="Niche Explorer" items={getAIItems(activeSub.key)} />
+        <section className="section-card">
+          <SectionTitle title="Niche Engagement Preview" action="Analytics" onAction={() => onNavigate("/analytics/niche")} />
+          <AnalyticsChart variant="bar" />
+        </section>
+      </div>
+    );
+  }
+
+  if (activeSub.key === "opportunity-scanner") {
+    return (
+      <>
+        <div className="section-grid three">
+          <InfoPanel title="Scanner Inputs" items={getAIItems(activeSub.key)} />
+          <InfoPanel title="AI Scan Summary" items={[`Last scanned: ${lastScanned}`, ...scanSummary]} />
+          <InfoPanel title="Demo Data Status" items={["Demo Data", "Ready", "Not Connected API", "Frontend scan sort"]} />
+        </div>
+        <section className="section-card">
+          <SectionTitle title="Scanned Opportunities" action="View Top 20" onAction={() => onNavigate("/ai-clip-intelligence/top-20-opportunities")} />
+          <VideoOpportunityTable items={opportunities} onAnalyze={onAnalyze} onClip={onClip} onSave={onSave} />
+        </section>
+      </>
+    );
+  }
+
+  if (activeSub.key === "competitor-intelligence") {
+    return (
+      <div className="section-grid three">
+        <InfoPanel title="Competitor Intelligence" items={getAIItems(activeSub.key)} />
+        <InfoPanel title="Creator Benchmarks" items={opportunities.slice(0, 5).map((item) => `${item.channel}: ${item.engagement} engagement`)} />
+        <InfoPanel title="Content Gaps" items={["Short hooks", "Tutorial breakdowns", "Affiliate CTA clips", "Platform repost opportunities"]} />
+      </div>
+    );
+  }
+
+  if (activeSub.key === "ai-advisor") {
+    return (
+      <div className="section-grid two">
+        <InfoPanel title="AI Advisor" items={getAIItems(activeSub.key)} />
+        <section className="section-card">
+          <SectionTitle title="Today Action Plan" action="Open Clip Studio" onAction={() => onNavigate("/clip-studio/source-video")} />
+          <div className="tag-cloud">
+            {recommendations.map((item) => (
+              <StatusBadge label={`${item.action}: ${item.status}`} tone={item.status === "Demo Data" ? "blue" : "amber"} key={item.action} />
+            ))}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  const tableItems = activeSub.key === "saved-opportunities" ? savedOpportunities : opportunities;
+  return (
+    <section className="section-card">
+      <SectionTitle title={activeSub.key === "saved-opportunities" ? "Saved Opportunities" : "Top 20 Opportunities"} action="View Saved" onAction={() => onNavigate("/ai-clip-intelligence/saved-opportunities")} />
+      {tableItems.length === 0 ? (
+        <EmptyState title="No saved opportunities yet" description="Click Save on any opportunity to store it here as Demo Data." />
+      ) : (
+        <VideoOpportunityTable items={tableItems} onAnalyze={onAnalyze} onClip={onClip} onSave={onSave} />
+      )}
+    </section>
   );
 }
 
@@ -758,6 +966,37 @@ function ContentLibrary({
   onArchiveContent: (item: ContentItem) => void;
   onScheduleContent: (item: ContentItem) => void;
 }) {
+  const [showDemoFilters, setShowDemoFilters] = useState(true);
+  const [filters, setFilters] = useState<DemoFilterState>(defaultDemoFilters);
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const campaignOptions = useMemo(() => ["All", ...Array.from(new Set(contentItems.map((item) => item.campaign)))], [contentItems]);
+  const filteredItems = useMemo(() => {
+    const keyword = filters.keyword.trim().toLowerCase();
+
+    return contentItems.filter((item) => {
+      const itemPerformance = getContentPerformance(item);
+      const searchable = [item.title, item.category, item.platform, item.status, item.campaign, item.metric].join(" ").toLowerCase();
+      const matchesKeyword = !keyword || searchable.includes(keyword);
+      const matchesCategory = filters.category === "Demo Data" || item.category === filters.category;
+      const matchesPlatform = filters.platform === "All" || item.platform === filters.platform;
+      const matchesStatus = filters.status === "All" || item.status === filters.status;
+      const matchesDate = !filters.date || item.date === filters.date;
+      const matchesPerformance = filters.performance === "All" || itemPerformance === filters.performance;
+      const matchesCampaign = filters.campaign === "All" || item.campaign === filters.campaign;
+
+      return matchesKeyword && matchesCategory && matchesPlatform && matchesStatus && matchesDate && matchesPerformance && matchesCampaign;
+    });
+  }, [contentItems, filters]);
+
+  const updateFilter = <K extends keyof DemoFilterState>(key: K, value: DemoFilterState[K]) => {
+    setFilters((current) => ({ ...current, [key]: value }));
+  };
+
+  const resetFilters = () => {
+    setFilters(defaultDemoFilters);
+    setViewMode("grid");
+  };
+
   return (
     <>
       <PageHeader
@@ -766,8 +1005,17 @@ function ContentLibrary({
         description="Browse all content, collections, categories, search filters, and archived assets in one clean library."
         actions={<button className="primary-button" type="button">View All</button>}
       />
-      <FilterBar filters={["Keyword", "Category", "Platform", "Status", "Date", "Performance", "Campaign", "Grid/List"]} />
-      <ContentLibraryContent activeSub={activeSub} contentItems={contentItems} onArchiveContent={onArchiveContent} onScheduleContent={onScheduleContent} />
+      <DemoFilterPanel
+        campaignOptions={campaignOptions}
+        filters={filters}
+        showDemoFilters={showDemoFilters}
+        viewMode={viewMode}
+        onReset={resetFilters}
+        onToggle={() => setShowDemoFilters((value) => !value)}
+        onUpdate={updateFilter}
+        onViewModeChange={setViewMode}
+      />
+      <ContentLibraryContent activeSub={activeSub} contentItems={filteredItems} onArchiveContent={onArchiveContent} onScheduleContent={onScheduleContent} viewMode={viewMode} />
     </>
   );
 }
@@ -852,6 +1100,97 @@ function ActiveSubmenuBar({ items, activePath, onNavigate }: { items: SubNavItem
         </button>
       ))}
     </div>
+  );
+}
+
+function DemoFilterPanel({
+  campaignOptions,
+  filters,
+  showDemoFilters,
+  viewMode,
+  onReset,
+  onToggle,
+  onUpdate,
+  onViewModeChange
+}: {
+  campaignOptions: string[];
+  filters: DemoFilterState;
+  showDemoFilters: boolean;
+  viewMode: ViewMode;
+  onReset: () => void;
+  onToggle: () => void;
+  onUpdate: <K extends keyof DemoFilterState>(key: K, value: DemoFilterState[K]) => void;
+  onViewModeChange: (mode: ViewMode) => void;
+}) {
+  return (
+    <section className="section-card demo-filter-card">
+      <div className="section-title">
+        <h2>Demo filters</h2>
+        <div className="row wrap">
+          <button className="secondary-button compact" type="button" onClick={onToggle}>
+            {showDemoFilters ? "Hide Demo Filters" : "Show Demo Filters"}
+          </button>
+          <button className="ghost-button compact" type="button" onClick={onReset}>Reset Filters</button>
+        </div>
+      </div>
+      {showDemoFilters && (
+        <div className="demo-filter-grid">
+          <label>
+            <span>Keyword</span>
+            <input value={filters.keyword} onChange={(event) => onUpdate("keyword", event.target.value)} placeholder="Search title, keyword, campaign..." />
+          </label>
+          <label>
+            <span>Category</span>
+            <select value={filters.category} onChange={(event) => onUpdate("category", event.target.value)}>
+              {categories.map((item) => (
+                <option value={item} key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Platform</span>
+            <select value={filters.platform} onChange={(event) => onUpdate("platform", event.target.value as PlatformFilter)}>
+              {(["All", "YouTube", "TikTok", "Instagram", "Facebook"] as const).map((item) => (
+                <option value={item} key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Status</span>
+            <select value={filters.status} onChange={(event) => onUpdate("status", event.target.value as StatusFilter)}>
+              {(["All", "Draft", "Ready", "Scheduled", "Published", "Failed"] as const).map((item) => (
+                <option value={item} key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Date</span>
+            <input type="date" value={filters.date} onChange={(event) => onUpdate("date", event.target.value)} />
+          </label>
+          <label>
+            <span>Performance</span>
+            <select value={filters.performance} onChange={(event) => onUpdate("performance", event.target.value as PerformanceFilter)}>
+              {(["All", "High", "Medium", "Low"] as const).map((item) => (
+                <option value={item} key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Campaign</span>
+            <select value={filters.campaign} onChange={(event) => onUpdate("campaign", event.target.value)}>
+              {campaignOptions.map((item) => (
+                <option value={item} key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <div className="view-toggle" aria-label="Grid/List view mode">
+            <span>Grid/List</span>
+            <button className={viewMode === "grid" ? "active" : ""} type="button" onClick={() => onViewModeChange("grid")}>Grid</button>
+            <button className={viewMode === "list" ? "active" : ""} type="button" onClick={() => onViewModeChange("list")}>List</button>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -1053,15 +1392,35 @@ function ContentLibraryContent({
   activeSub,
   contentItems,
   onArchiveContent,
-  onScheduleContent
+  onScheduleContent,
+  viewMode
 }: {
   activeSub: SubNavItem;
   contentItems: ContentItem[];
   onArchiveContent: (item: ContentItem) => void;
   onScheduleContent: (item: ContentItem) => void;
+  viewMode: ViewMode;
 }) {
+  const visibleItems = activeSub.key === "archive" ? contentItems.filter((item) => item.status === "Archived") : contentItems;
+
   if (activeSub.key === "categories") {
-    return <InfoPanel title="Categories" items={categories} />;
+    return (
+      <section className="section-card">
+        <SectionTitle title="Categories" action="Dropdown Active" />
+        <div className="category-dropdown-row">
+          <label>
+            <span>Category</span>
+            <select defaultValue="Demo Data">
+              {categories.map((item) => (
+                <option value={item} key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <StatusBadge label="Demo Data" tone="blue" />
+        </div>
+        <p className="muted">Use the filter panel above to apply the category dropdown to the content results.</p>
+      </section>
+    );
   }
 
   if (activeSub.key === "collections") {
@@ -1079,12 +1438,16 @@ function ContentLibraryContent({
 
   return (
     <section className="section-card">
-      <SectionTitle title={activeSub.key === "archive" ? "Archive" : "All Content"} action="Grid/List Toggle" />
-      <div className="content-grid">
-        {(activeSub.key === "archive" ? contentItems.filter((item) => item.status === "Archived") : contentItems).map((item) => (
+      <SectionTitle title={activeSub.key === "archive" ? "Archive" : "All Content"} action={viewMode === "grid" ? "Grid View" : "List View"} />
+      {visibleItems.length === 0 ? (
+        <EmptyState title="Tidak ada data yang cocok dengan filter saat ini." description="Reset filters or adjust the demo filter values." />
+      ) : (
+        <div className={viewMode === "grid" ? "content-grid" : "content-list"}>
+          {visibleItems.map((item) => (
           <ContentCard item={item} onArchive={onArchiveContent} onSchedule={onScheduleContent} key={`${item.id}-${item.title}`} />
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -1383,6 +1746,22 @@ function getRouteFromPath(pathname: string): { page: PageId; path: string } {
 
 function getActiveSub(nav: (typeof navItems)[number], activePath: string): SubNavItem {
   return nav.submenu.find((item) => item.path === activePath) ?? nav.submenu[0];
+}
+
+function getContentPerformance(item: ContentItem): "High" | "Medium" | "Low" {
+  if (item.performance) {
+    return item.performance;
+  }
+
+  if (item.status === "Published" || item.metric.toLowerCase().includes("views")) {
+    return "High";
+  }
+
+  if (item.status === "Ready" || item.status === "Scheduled") {
+    return "Medium";
+  }
+
+  return "Low";
 }
 
 function normalizePath(pathname: string) {
