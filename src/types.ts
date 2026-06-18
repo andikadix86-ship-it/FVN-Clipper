@@ -59,6 +59,7 @@ export interface Campaign {
 }
 
 export interface ContentItem {
+  id?: string;
   title: string;
   category: string;
   platform: string;
@@ -79,4 +80,31 @@ export interface Activity {
   title: string;
   meta: string;
   tone: StatusTone;
+}
+
+export interface GeneratedClip {
+  id: string;
+  title: string;
+  duration: string;
+  hookScore: number;
+  viralScore: number;
+  status: "Draft" | "Ready" | "Saved to Library" | "Saved to Campaign";
+  sourceTitle: string;
+}
+
+export interface ScheduleItem {
+  id: string;
+  title: string;
+  account: string;
+  platform: string;
+  day: string;
+  time: string;
+  status: "Draft" | "Ready" | "Scheduled" | "Published";
+}
+
+export interface AIRecommendation {
+  title: string;
+  description: string;
+  action: string;
+  status: "Demo Data" | "Not Connected";
 }

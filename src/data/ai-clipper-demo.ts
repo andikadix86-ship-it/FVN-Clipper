@@ -8,7 +8,19 @@ import {
   Megaphone,
   Settings
 } from "lucide-react";
-import type { Account, Activity, Campaign, ContentItem, NavItem, Stat, SubNavItem, VideoOpportunity } from "./types";
+import type {
+  Account,
+  Activity,
+  AIRecommendation,
+  Campaign,
+  ContentItem,
+  GeneratedClip,
+  NavItem,
+  ScheduleItem,
+  Stat,
+  SubNavItem,
+  VideoOpportunity
+} from "../types";
 
 const sub = (base: string, items: Array<[string, string]>): SubNavItem[] =>
   items.map(([key, label]) => ({
@@ -212,16 +224,16 @@ export const campaigns: Campaign[] = [
   { name: "Affiliate Product Clips", platform: "YouTube", start: "Draft", end: "Draft", progress: 12, compliance: 74, status: "Draft" }
 ];
 
-export const contentItems: ContentItem[] = [
-  { title: "AI CRM in 30 seconds", category: "AI", platform: "TikTok", campaign: "AI Tools Ramadan Launch", status: "Ready", metric: "8.2 score" },
-  { title: "Three budget rules", category: "Finance", platform: "Instagram", campaign: "Finance Shorts Sprint", status: "Scheduled", metric: "Jun 19, 09:00" },
-  { title: "Discipline hook test", category: "Motivation", platform: "YouTube", campaign: "Motivation Evergreen", status: "Published", metric: "124K views" },
-  { title: "Health myth opener", category: "Health", platform: "Facebook", campaign: "Demo Data", status: "Draft", metric: "Needs caption" },
-  { title: "Gaming setup affiliate", category: "Affiliate", platform: "TikTok", campaign: "Affiliate Product Clips", status: "Ready", metric: "CTA valid" },
-  { title: "Learning AI basics", category: "Education", platform: "LinkedIn", campaign: "Demo Data", status: "Archived", metric: "Archived" }
+export const defaultContentItems: ContentItem[] = [
+  { id: "content-1", title: "AI CRM in 30 seconds", category: "AI", platform: "TikTok", campaign: "AI Tools Ramadan Launch", status: "Ready", metric: "8.2 score" },
+  { id: "content-2", title: "Three budget rules", category: "Finance", platform: "Instagram", campaign: "Finance Shorts Sprint", status: "Scheduled", metric: "Jun 19, 09:00" },
+  { id: "content-3", title: "Discipline hook test", category: "Motivation", platform: "YouTube", campaign: "Motivation Evergreen", status: "Published", metric: "124K views" },
+  { id: "content-4", title: "Health myth opener", category: "Health", platform: "Facebook", campaign: "Demo Data", status: "Draft", metric: "Needs caption" },
+  { id: "content-5", title: "Gaming setup affiliate", category: "Affiliate", platform: "TikTok", campaign: "Affiliate Product Clips", status: "Ready", metric: "CTA valid" },
+  { id: "content-6", title: "Learning AI basics", category: "Education", platform: "LinkedIn", campaign: "Demo Data", status: "Archived", metric: "Archived" }
 ];
 
-export const accounts: Account[] = [
+export const defaultAccounts: Account[] = [
   { name: "TikTok A", platform: "TikTok", status: "Connected", health: "Ready", lastSync: "12 minutes ago" },
   { name: "TikTok B", platform: "TikTok", status: "Connected", health: "Token healthy", lastSync: "29 minutes ago" },
   { name: "YouTube A", platform: "YouTube", status: "Connected", health: "Ready", lastSync: "1 hour ago" },
@@ -232,11 +244,37 @@ export const accounts: Account[] = [
   { name: "X Growth", platform: "X", status: "Not Connected", health: "API not connected", lastSync: "Never" }
 ];
 
+export const defaultGeneratedClips: GeneratedClip[] = [
+  { id: "clip-1", title: "Hook A", duration: "28s", hookScore: 91, viralScore: 88, status: "Ready", sourceTitle: "AI tools for small business growth in 2026" },
+  { id: "clip-2", title: "Education Cut", duration: "34s", hookScore: 87, viralScore: 85, status: "Draft", sourceTitle: "AI tools for small business growth in 2026" },
+  { id: "clip-3", title: "CTA Ending", duration: "40s", hookScore: 83, viralScore: 82, status: "Draft", sourceTitle: "AI tools for small business growth in 2026" }
+];
+
+export const defaultSchedules: ScheduleItem[] = [
+  { id: "schedule-1", title: "Three budget rules", account: "Instagram A", platform: "Instagram", day: "Thu", time: "09:00", status: "Scheduled" },
+  { id: "schedule-2", title: "Discipline hook test", account: "YouTube A", platform: "YouTube", day: "Fri", time: "19:30", status: "Published" }
+];
+
 export const activities: Activity[] = [
   { title: "Generated 12 demo clips from YouTube source", meta: "8 minutes ago", tone: "blue" },
   { title: "Compliance warning on Finance Shorts Sprint", meta: "22 minutes ago", tone: "amber" },
   { title: "TikTok A publishing job completed", meta: "1 hour ago", tone: "green" },
   { title: "AI found 20 new opportunities in AI & Technology", meta: "2 hours ago", tone: "cyan" }
+];
+
+export const recommendations: AIRecommendation[] = [
+  {
+    title: "AI Recommendation For You",
+    description: "Prioritize AI & Technology clips today. Best posting window is 19:00 to 21:00 Asia/Jakarta.",
+    action: "Apply Recommendation",
+    status: "Demo Data"
+  },
+  {
+    title: "Integration Reminder",
+    description: "Connect Facebook, LinkedIn, and X before enabling automated publishing.",
+    action: "Review Integrations",
+    status: "Not Connected"
+  }
 ];
 
 export const chartData = [
@@ -249,6 +287,8 @@ export const chartData = [
   { name: "Sun", views: 96000, engagement: 10.1 }
 ];
 
-export const categories = ["Business", "Finance", "Education", "AI", "Islamic", "Motivation", "Gaming", "Health", "Affiliate", "Custom Category"];
+export const analyticsMetrics = ["Total views", "Watch time", "Followers", "Engagement", "Growth"];
+export const categories = ["Business", "Finance", "Education", "AI", "Islamic", "Motivation", "Gaming", "Health", "Affiliate", "Custom"];
 export const niches = ["Business", "Finance", "Education", "AI & Technology", "Motivation", "Islamic", "Health", "Gaming", "Affiliate", "News", "Custom Niche"];
 export const platforms = ["YouTube", "TikTok", "Instagram", "Facebook", "X", "LinkedIn"];
+

@@ -1167,4 +1167,34 @@ td {
   .url-row .primary-button {
     width: 100%;
   }
+
+  table,
+  thead,
+  tbody,
+  tr,
+  th,
+  td {
+    display: block;
+  }
+
+  table {
+    min-width: 0;
+  }
+
+  thead {
+    display: none;
+  }
+
+  tr {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #ffffff;
+    margin-bottom: 12px;
+    padding: 10px;
+  }
+
+  td {
+    border-bottom: 0;
+    padding: 8px 4px;
+  }
 }

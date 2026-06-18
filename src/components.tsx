@@ -17,8 +17,8 @@ import {
   XCircle
 } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { accounts, chartData, navItems } from "./data";
-import type { Account, Activity, Campaign, ContentItem, Stat, StatusTone, VideoOpportunity } from "./types";
+import { chartData, navItems, recommendations } from "./data/ai-clipper-demo";
+import type { Account, Activity, Campaign, ContentItem, GeneratedClip, ScheduleItem, Stat, StatusTone, VideoOpportunity } from "./types";
 
 interface SidebarProps {
   activePage: string;
@@ -28,6 +28,23 @@ interface SidebarProps {
   onNavigate: (path: string) => void;
   onCollapse: () => void;
   onCloseMobile: () => void;
+}
+
+export function AppShell({ children, onAction }: { children: React.ReactNode; onAction: (label: string) => void }) {
+  const handleButtonCapture = (event: React.MouseEvent<HTMLDivElement>) => {
+    const button = (event.target as HTMLElement).closest("button");
+    if (!button || button.disabled) {
+      return;
+    }
+    const label = button.getAttribute("aria-label") || button.textContent?.trim() || "Action";
+    onAction(label);
+  };
+
+  return (
+    <div className="app-shell" onClickCapture={handleButtonCapture}>
+      {children}
+    </div>
+  );
 }
 
 export function AppSidebar({ activePage, activePath, collapsed, mobileOpen, onNavigate, onCollapse, onCloseMobile }: SidebarProps) {
@@ -202,7 +219,17 @@ export function VideoOpportunityCard({ item, onClip }: { item: VideoOpportunity;
   );
 }
 
-export function VideoOpportunityTable({ items, onClip }: { items: VideoOpportunity[]; onClip: (item: VideoOpportunity) => void }) {
+export function VideoOpportunityTable({
+  items,
+  onClip,
+  onSave,
+  onAnalyze
+}: {
+  items: VideoOpportunity[];
+  onClip: (item: VideoOpportunity) => void;
+  onSave: (item: VideoOpportunity) => void;
+  onAnalyze: (item: VideoOpportunity) => void;
+}) {
   return (
     <div className="table-wrap">
       <table>
@@ -247,8 +274,8 @@ export function VideoOpportunityTable({ items, onClip }: { items: VideoOpportuni
                   <button className="primary-button compact" type="button" onClick={() => onClip(item)}>
                     Clip This
                   </button>
-                  <button className="secondary-button compact" type="button">Save</button>
-                  <button className="ghost-button compact" type="button">Analyze</button>
+                  <button className="secondary-button compact" type="button" onClick={() => onSave(item)}>Save</button>
+                  <button className="ghost-button compact" type="button" onClick={() => onAnalyze(item)}>Analyze</button>
                 </div>
               </td>
             </tr>
@@ -307,7 +334,7 @@ export function ComplianceChecklist() {
   );
 }
 
-export function ContentCard({ item }: { item: ContentItem }) {
+export function ContentCard({ item, onSchedule }: { item: ContentItem; onSchedule?: (item: ContentItem) => void }) {
   const tone = item.status === "Published" ? "green" : item.status === "Scheduled" ? "blue" : item.status === "Ready" ? "cyan" : item.status === "Archived" ? "slate" : "amber";
   return (
     <article className="content-card">
@@ -320,7 +347,7 @@ export function ContentCard({ item }: { item: ContentItem }) {
         <strong>{item.metric}</strong>
         <div className="row wrap content-actions">
           <button className="secondary-button tiny" type="button">Preview</button>
-          <button className="secondary-button tiny" type="button">Schedule</button>
+          <button className="secondary-button tiny" type="button" onClick={() => onSchedule?.(item)}>Schedule</button>
           <button className="ghost-button tiny" type="button">Move to Campaign</button>
           <button className="ghost-button tiny" type="button">Archive</button>
         </div>
@@ -329,7 +356,7 @@ export function ContentCard({ item }: { item: ContentItem }) {
   );
 }
 
-export function AccountCard({ account }: { account: Account }) {
+export function AccountCard({ account, onToggle }: { account: Account; onToggle?: (account: Account) => void }) {
   const tone = account.status === "Connected" ? "green" : "amber";
   return (
     <article className="account-card">
@@ -342,13 +369,17 @@ export function AccountCard({ account }: { account: Account }) {
       <span className="muted">{account.health} - Last sync: {account.lastSync}</span>
       <div className="row">
         <button className="secondary-button tiny" type="button">Refresh Status</button>
-        {account.status === "Connected" ? <button className="ghost-button tiny" type="button">Disconnect</button> : <button className="secondary-button tiny" type="button">Connect</button>}
+        {account.status === "Connected" ? (
+          <button className="ghost-button tiny" type="button" onClick={() => onToggle?.(account)}>Disconnect</button>
+        ) : (
+          <button className="secondary-button tiny" type="button" onClick={() => onToggle?.(account)}>Connect</button>
+        )}
       </div>
     </article>
   );
 }
 
-export function ScheduleCalendar() {
+export function CalendarPreview({ schedules = [] }: { schedules?: ScheduleItem[] }) {
   const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const slots = ["TikTok A", "YouTube A", "Instagram A", "TikTok B", "Facebook"];
   return (
@@ -357,7 +388,7 @@ export function ScheduleCalendar() {
         <div className="calendar-day" key={day}>
           <strong>{day}</strong>
           <span>{index + 18}</span>
-          {slots.slice(0, (index % 3) + 2).map((slot) => (
+          {[...slots.slice(0, (index % 3) + 2), ...schedules.filter((schedule) => schedule.day === day).map((schedule) => `${schedule.time} ${schedule.account}`)].map((slot) => (
             <button className="calendar-pill" type="button" key={`${day}-${slot}`}>
               {slot}
             </button>
@@ -367,6 +398,8 @@ export function ScheduleCalendar() {
     </div>
   );
 }
+
+export const ScheduleCalendar = CalendarPreview;
 
 export function ActivityFeed({ items }: { items: Activity[] }) {
   return (
@@ -426,14 +459,14 @@ export function EmptyState({ title, description }: { title: string; description:
   );
 }
 
-export function RightPanel() {
+export function RightPanel({ accounts }: { accounts: Account[] }) {
   return (
     <aside className="right-panel">
       <div className="panel-card gradient-panel">
-        <StatusBadge label="Demo Data" tone="blue" />
-        <h3>AI Recommendation For You</h3>
-        <p>Prioritize AI & Technology clips today. Best posting window is 19:00 to 21:00 Asia/Jakarta.</p>
-        <button className="white-button" type="button">Apply Recommendation</button>
+        <DemoDataBadge />
+        <h3>{recommendations[0].title}</h3>
+        <p>{recommendations[0].description}</p>
+        <button className="white-button" type="button">{recommendations[0].action}</button>
       </div>
       <div className="panel-card">
         <div className="row between">
@@ -450,6 +483,43 @@ export function RightPanel() {
         </div>
       </div>
     </aside>
+  );
+}
+
+export function GeneratedClipList({
+  clips,
+  onSaveToCampaign,
+  onSaveToLibrary
+}: {
+  clips: GeneratedClip[];
+  onSaveToCampaign: (clip: GeneratedClip) => void;
+  onSaveToLibrary: (clip: GeneratedClip) => void;
+}) {
+  return (
+    <section className="section-card">
+      <SectionHeading title="Generated Clips" action="Preview All" />
+      {clips.length === 0 ? (
+        <EmptyState title="No generated clips yet" description="Click Generate Clips to create demo clips from the selected source." />
+      ) : (
+        <div className="clip-list">
+          {clips.map((clip, index) => (
+            <div className="clip-row" key={clip.id}>
+              <div className="mini-thumb">C{index + 1}</div>
+              <div>
+                <strong>{clip.title}</strong>
+                <span>{clip.duration} duration - {clip.sourceTitle}</span>
+              </div>
+              <ScoreBadge score={clip.hookScore} label="Hook" />
+              <ScoreBadge score={clip.viralScore} label="Viral" />
+              <StatusBadge label={clip.status} tone={clip.status === "Ready" ? "green" : clip.status === "Draft" ? "amber" : "blue"} />
+              <button className="secondary-button tiny" type="button">Edit</button>
+              <button className="secondary-button tiny" type="button" onClick={() => onSaveToCampaign(clip)}>Save to Campaign</button>
+              <button className="ghost-button tiny" type="button" onClick={() => onSaveToLibrary(clip)}>Save to Library</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -498,6 +568,32 @@ export function IconButton({ label, children, onClick }: { label: string; childr
     <button className="icon-button" type="button" aria-label={label} title={label} onClick={onClick}>
       {children}
     </button>
+  );
+}
+
+export function DemoDataBadge() {
+  return <StatusBadge label="Demo Data" tone="blue" />;
+}
+
+export function NotConnectedBadge() {
+  return <StatusBadge label="Not Connected" tone="amber" />;
+}
+
+export function ActionButton({ children, onClick, variant = "primary" }: { children: React.ReactNode; onClick?: () => void; variant?: "primary" | "secondary" | "ghost" }) {
+  const className = variant === "primary" ? "primary-button" : variant === "secondary" ? "secondary-button" : "ghost-button";
+  return <button className={className} type="button" onClick={onClick}>{children}</button>;
+}
+
+export function SectionCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <section className={`section-card ${className}`}>{children}</section>;
+}
+
+export function SectionHeading({ title, action }: { title: string; action?: string }) {
+  return (
+    <div className="section-title">
+      <h2>{title}</h2>
+      {action && <button className="ghost-button" type="button">{action}</button>}
+    </div>
   );
 }
 
