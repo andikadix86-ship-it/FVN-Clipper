@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
   AccountCard,
-  ActivityFeed,
   AnalyticsChart,
   AppHeader,
   AppShell,
@@ -21,12 +21,11 @@ import {
   StatusBadge,
   ToggleGrid,
   UploadPanel,
+  VideoOpportunityCard,
   VideoOpportunityTable
 } from "./components";
 import {
-  activities,
   campaigns,
-  categories,
   defaultAccounts,
   defaultContentItems,
   defaultGeneratedClips,
@@ -34,12 +33,30 @@ import {
   navItems,
   niches,
   opportunities,
-  recommendations,
   stats
 } from "./data/ai-clipper-demo";
 import { aiProviderEnvStatus, environmentStatus, featureFlagEnvStatus, socialIntegrationEnvStatus } from "./env";
 import type { Account, Campaign, ContentItem, GeneratedClip, PageId, ScheduleItem, SubNavItem, VideoOpportunity } from "./types";
 import type { EnvStatusItem } from "./env";
+import {
+  buildOpportunityUrl,
+  fetchApiData,
+  formatEnumLabel,
+  mapCampaign,
+  mapOpportunity,
+  mapSchedule,
+  toApiPerformance,
+  toApiPlatform,
+  toApiStatus,
+  type ApiCampaign,
+  type ApiCategory,
+  type ApiCompetitor,
+  type ApiOpportunity,
+  type ApiPublishingSchedule,
+  type ApiRecommendation,
+  type DashboardOverviewData,
+  type OpportunityQuery
+} from "./api";
 
 const SELECTED_SOURCE_KEY = "fvn-selected-source";
 const SAVED_OPPORTUNITIES_KEY = "fvn-saved-opportunities";
@@ -51,7 +68,7 @@ const ACCOUNTS_KEY = "fvn-accounts";
 const APPROVAL_STATUS_KEY = "fvn-approval-status";
 
 type PlatformFilter = "All" | "YouTube" | "TikTok" | "Instagram" | "Facebook";
-type StatusFilter = "All" | ContentItem["status"];
+type StatusFilter = "All" | ContentItem["status"] | "Paused";
 type PerformanceFilter = "All" | "High" | "Medium" | "Low";
 type ViewMode = "grid" | "list";
 
@@ -134,9 +151,17 @@ export function App() {
     navigate("/clip-studio/source-video");
   };
 
-  const saveOpportunity = (item: VideoOpportunity) => {
-    setSavedOpportunities((current) => (current.some((opportunity) => opportunity.id === item.id) ? current : [...current, { ...item, status: "Saved" }]));
-    showToast(`Saved opportunity: ${item.title}`);
+  const saveOpportunity = async (item: VideoOpportunity) => {
+    try {
+      await fetchApiData<ApiOpportunity>(`/api/ai-clip-intelligence/opportunities/${item.id}/save`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ saved: !item.isSaved })
+      });
+      showToast(`${item.isSaved ? "Unsaved" : "Saved"} opportunity: ${item.title}`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to update opportunity");
+    }
   };
 
   const analyzeOpportunity = (item: VideoOpportunity) => {
@@ -501,13 +526,7 @@ function PageRouter({
 
 function Dashboard({
   activeSub,
-  campaigns,
-  opportunities,
-  schedules,
-  onAnalyze,
-  onClip,
-  onNavigate,
-  onSave
+  onNavigate
 }: {
   activeSub: SubNavItem;
   campaigns: Campaign[];
@@ -518,80 +537,69 @@ function Dashboard({
   onNavigate: (path: string) => void;
   onSave: (item: VideoOpportunity) => void;
 }) {
+  const overview = useApiResource<DashboardOverviewData>("/api/dashboard/overview", activeSub.key === "overview");
+  const recommendationState = useApiResource<ApiRecommendation[]>("/api/dashboard/recommendations", activeSub.key === "ai-recommendation-today");
+  const campaignState = useApiResource<ApiCampaign[]>("/api/dashboard/campaigns", activeSub.key === "campaign-overview");
+  const calendarState = useApiResource<ApiPublishingSchedule[]>("/api/dashboard/publishing-calendar", activeSub.key === "publishing-calendar-preview");
+
   if (activeSub.key === "ai-recommendation-today") {
     return (
       <>
         <DashboardHero />
-        <StatsGrid />
-        <div className="section-grid two">
-          <section className="section-card">
-            <SectionTitle title="AI Recommendation Today" action="Open AI Advisor" onAction={() => onNavigate("/ai-clip-intelligence/ai-advisor")} />
-            <div className="recommendation-panel">
-              {recommendations.map((item) => (
-                <article className="recommendation-row" key={item.title}>
-                  <StatusBadge label={item.status} tone={item.status === "Demo Data" ? "blue" : "amber"} />
-                  <div>
-                    <small>{item.action}</small>
-                    <strong>{item.title}</strong>
-                    <span>{item.description}</span>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-          <section className="section-card">
-            <SectionTitle title="Recommended Opportunities" action="View Scanner" onAction={() => onNavigate("/ai-clip-intelligence/opportunity-scanner")} />
-            <div className="top-clip-list">
-              {opportunities.slice(0, 5).map((item, index) => (
-                <TopClipRow item={item} index={index + 1} onClip={onClip} key={item.id} />
-              ))}
-            </div>
-          </section>
-        </div>
+        <ApiStateView state={recommendationState} emptyTitle="No recommendations yet" emptyDescription="Database returned no AI Recommendation Today records.">
+          {(items) => (
+            <section className="section-card">
+              <SectionTitle title="AI Recommendation Today" action="Open AI Advisor" onAction={() => onNavigate("/ai-clip-intelligence/ai-advisor")} />
+              <RecommendationList items={items} />
+            </section>
+          )}
+        </ApiStateView>
       </>
     );
   }
 
   if (activeSub.key === "campaign-overview") {
+    const campaignItems = campaignState.data?.map(mapCampaign) ?? [];
+
     return (
       <>
         <DashboardHero />
-        <StatsGrid />
-        <section className="section-card">
-          <SectionTitle title="Campaign Overview" action="View All Campaigns" onAction={() => onNavigate("/campaign-clipper/library")} />
-          <div className="campaign-grid">
-            {campaigns.map((campaign) => (
-              <CampaignCard campaign={campaign} key={campaign.name} />
-            ))}
-          </div>
-        </section>
-        <div className="section-grid two">
-          <InfoPanel title="Campaign Signals" items={["Active demo campaigns", "Compliance warnings", "Draft campaign queue", "Ready for AI review"]} />
-          <section className="section-card">
-            <SectionTitle title="Campaign Performance Preview" action="Analytics" onAction={() => onNavigate("/analytics/campaign")} />
-            <AnalyticsChart variant="bar" />
-          </section>
-        </div>
+        <ApiStateView state={campaignState} emptyTitle="No campaigns found" emptyDescription="Database returned no campaign records.">
+          {() => (
+            <section className="section-card">
+              <SectionTitle title="Campaign Overview" action="View All Campaigns" onAction={() => onNavigate("/campaign-clipper/library")} />
+              <div className="campaign-grid">
+                {campaignItems.map((campaign) => (
+                  <CampaignCard campaign={campaign} key={campaign.id ?? campaign.name} />
+                ))}
+              </div>
+            </section>
+          )}
+        </ApiStateView>
       </>
     );
   }
 
   if (activeSub.key === "publishing-calendar-preview") {
+    const scheduleItems = calendarState.data?.map(mapSchedule) ?? [];
+
     return (
       <>
         <DashboardHero />
-        <StatsGrid />
-        <section className="section-card">
-          <SectionTitle title="Publishing Calendar Preview" action="Open Calendar" onAction={() => onNavigate("/scheduler/publishing-calendar")} />
-          <CalendarPreview schedules={schedules} />
-        </section>
-        <div className="section-grid two">
-          <section className="section-card">
-            <SectionTitle title="Upcoming Schedule" action="Content Queue" onAction={() => onNavigate("/scheduler/content-queue")} />
-            <DashboardSchedule schedules={schedules} />
-          </section>
-          <InfoPanel title="Calendar Status" items={["Demo schedule data", "TikTok slot ready", "YouTube slot ready", "Manual approval available"]} />
-        </div>
+        <ApiStateView state={calendarState} emptyTitle="No publishing schedules found" emptyDescription="Database returned no calendar records.">
+          {() => (
+            <>
+              <section className="section-card">
+                <SectionTitle title="Publishing Calendar Preview" action="Open Calendar" onAction={() => onNavigate("/scheduler/publishing-calendar")} />
+                <CalendarPreview schedules={scheduleItems} />
+              </section>
+              <section className="section-card">
+                <SectionTitle title="Upcoming Schedule" action="Content Queue" onAction={() => onNavigate("/scheduler/content-queue")} />
+                <DashboardSchedule schedules={scheduleItems} />
+              </section>
+            </>
+          )}
+        </ApiStateView>
       </>
     );
   }
@@ -599,47 +607,27 @@ function Dashboard({
   return (
     <>
       <DashboardHero />
-      <StatsGrid />
-      <div className="section-grid two">
-        <section className="section-card">
-          <SectionTitle title="Top 20 Video Opportunities" action="View All" onAction={() => onNavigate("/ai-clip-intelligence/top-20-opportunities")} />
-          <VideoOpportunityTable items={opportunities.slice(0, 5)} onAnalyze={onAnalyze} onClip={onClip} onSave={onSave} />
-        </section>
-        <section className="section-card">
-          <SectionTitle title="Upcoming Schedule" action="View Calendar" onAction={() => onNavigate("/scheduler/publishing-calendar")} />
-          <DashboardSchedule schedules={schedules} />
-          <div className="activity-panel">
-            <SectionTitle title="Recent Activities" action="View All" onAction={() => onNavigate("/analytics/ai-insights")} />
-            <ActivityFeed items={activities} />
-          </div>
-        </section>
-        <section className="section-card dashboard-wide">
-          <SectionTitle title="Campaign Overview" action="View All Campaigns" onAction={() => onNavigate("/campaign-clipper/library")} />
-          <div className="campaign-list">
-            {campaigns.slice(0, 3).map((campaign) => (
-              <CampaignCard campaign={campaign} key={campaign.name} />
-            ))}
-          </div>
-        </section>
-      </div>
-      <div className="section-grid two">
-        <section className="section-card">
-          <SectionTitle title="Publishing Calendar" action="Week" onAction={() => onNavigate("/scheduler/publishing-calendar")} />
-          <CalendarPreview schedules={schedules} />
-        </section>
-        <section className="section-card">
-          <SectionTitle title="Content Performance" action="This Month" onAction={() => onNavigate("/analytics/overview")} />
-          <AnalyticsChart />
-        </section>
-      </div>
-      <section className="section-card">
-        <SectionTitle title="Top Performing Clips" action="View All" onAction={() => onNavigate("/analytics/content")} />
-        <div className="top-clip-list">
-          {opportunities.slice(0, 4).map((item, index) => (
-            <TopClipRow item={item} index={index + 1} onClip={onClip} key={item.id} />
-          ))}
-        </div>
-      </section>
+      <ApiStateViewObject state={overview} emptyTitle="No dashboard overview data" emptyDescription="Database returned no overview metrics.">
+        {(data) => (
+          <>
+            <DashboardMetricGrid data={data} />
+            <div className="section-grid two">
+              <section className="section-card">
+                <SectionTitle title="Top Categories" action="Open Categories" onAction={() => onNavigate("/ai-clip-intelligence/niche-explorer")} />
+                <div className="tag-cloud">
+                  {data.topCategories.map((category) => (
+                    <StatusBadge label={`${category.name}: ${category.opportunities}`} tone={category.sourceType === "DEMO" ? "blue" : "slate"} key={category.id} />
+                  ))}
+                </div>
+              </section>
+              <section className="section-card">
+                <SectionTitle title="Latest Recommendations" action="View All" onAction={() => onNavigate("/dashboard/ai-recommendation-today")} />
+                <RecommendationList items={data.latestRecommendations} />
+              </section>
+            </div>
+          </>
+        )}
+      </ApiStateViewObject>
     </>
   );
 }
@@ -660,16 +648,11 @@ function DashboardHero() {
 
 function DashboardSchedule({ schedules }: { schedules: ScheduleItem[] }) {
   const rows = schedules.slice(0, 4);
-  const fallbackRows: ScheduleItem[] = [
-    { id: "fallback-1", title: "5 Habits That Change Your Life", account: "TikTok A", platform: "TikTok", day: "Thu", time: "09:00", status: "Scheduled" },
-    { id: "fallback-2", title: "Mindset of the Rich", account: "YouTube A", platform: "YouTube", day: "Thu", time: "12:00", status: "Scheduled" },
-    { id: "fallback-3", title: "How AI Will Change Business", account: "Instagram A", platform: "Instagram", day: "Thu", time: "15:00", status: "Scheduled" },
-    { id: "fallback-4", title: "The Power of Consistency", account: "Facebook Page", platform: "Facebook", day: "Thu", time: "18:00", status: "Scheduled" }
-  ];
 
   return (
     <div className="dashboard-schedule">
-      {(rows.length ? rows : fallbackRows).map((schedule) => (
+      {rows.length === 0 && <EmptyState title="No schedule data" description="Database returned no publishing schedule records." />}
+      {rows.map((schedule) => (
         <div className="schedule-row" key={schedule.id}>
           <span className="schedule-time">{schedule.time}</span>
           <SocialIcon platform={schedule.platform} />
@@ -678,6 +661,7 @@ function DashboardSchedule({ schedules }: { schedules: ScheduleItem[] }) {
             <small>{schedule.account}</small>
           </span>
           <span className="schedule-day">Today</span>
+          {schedule.sourceType && <StatusBadge label={schedule.sourceType} tone={schedule.sourceType === "DEMO" ? "blue" : "slate"} />}
         </div>
       ))}
     </div>
@@ -704,6 +688,7 @@ function TopClipRow({ item, index, onClip }: { item: VideoOpportunity; index: nu
         <small>Eng.</small>
         <strong>{item.engagement}</strong>
       </div>
+      {item.sourceType && <StatusBadge label={item.sourceType} tone={item.sourceType === "DEMO" ? "blue" : "slate"} />}
       <button className="primary-button compact" type="button" onClick={() => onClip(item)}>Clip</button>
     </article>
   );
@@ -712,10 +697,6 @@ function TopClipRow({ item, index, onClip }: { item: VideoOpportunity; index: nu
 function AIClipIntelligence({
   activeSub,
   isScanning,
-  lastScanned,
-  opportunities,
-  savedOpportunities,
-  scanSummary,
   onAnalyze,
   onClip,
   onNavigate,
@@ -732,8 +713,54 @@ function AIClipIntelligence({
   onClip: (item: VideoOpportunity) => void;
   onNavigate: (path: string) => void;
   onRunAIScan: () => void;
-  onSave: (item: VideoOpportunity) => void;
+  onSave: (item: VideoOpportunity) => void | Promise<void>;
 }) {
+  const [showDemoFilters, setShowDemoFilters] = useState(true);
+  const [filters, setFilters] = useState<DemoFilterState>(defaultDemoFilters);
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const categoryState = useApiResource<ApiCategory[]>("/api/ai-clip-intelligence/categories", true);
+  const campaignState = useApiResource<ApiCampaign[]>("/api/dashboard/campaigns", true);
+  const recommendationState = useApiResource<ApiRecommendation[]>("/api/dashboard/recommendations", activeSub.key === "ai-advisor");
+  const competitorState = useApiResource<ApiCompetitor[]>("/api/ai-clip-intelligence/competitors", activeSub.key === "competitor-intelligence");
+  const opportunityUrl = useMemo(() => {
+    const query: OpportunityQuery = {
+      keyword: filters.keyword,
+      category: filters.category,
+      platform: filters.platform === "All" ? undefined : toApiPlatform(filters.platform),
+      status: filters.status === "All" ? undefined : toApiStatus(filters.status),
+      date: filters.date,
+      performance: filters.performance === "All" ? undefined : toApiPerformance(filters.performance),
+      campaign: filters.campaign
+    };
+
+    if (activeSub.key === "top-20-opportunities") {
+      query.limit = 20;
+      query.sort = "opportunityScore_desc";
+    }
+
+    if (activeSub.key === "saved-opportunities") {
+      query.saved = true;
+    }
+
+    return buildOpportunityUrl(query);
+  }, [activeSub.key, filters]);
+  const opportunityState = useApiResource<ApiOpportunity[]>(opportunityUrl, activeSub.key !== "competitor-intelligence" && activeSub.key !== "ai-advisor");
+  const mappedOpportunities = useMemo(() => (opportunityState.data ?? []).map(mapOpportunity), [opportunityState.data]);
+
+  const updateFilter = <K extends keyof DemoFilterState>(key: K, value: DemoFilterState[K]) => {
+    setFilters((current) => ({ ...current, [key]: value }));
+  };
+
+  const resetFilters = () => {
+    setFilters(defaultDemoFilters);
+    setViewMode("grid");
+  };
+
+  const saveFromApi = async (item: VideoOpportunity) => {
+    await onSave(item);
+    opportunityState.reload();
+  };
+
   return (
     <>
       <PageHeader
@@ -742,19 +769,30 @@ function AIClipIntelligence({
         description="The intelligence hub for trends, niches, competitors, advisor insights, and short-form video opportunity scoring."
         actions={<button className="primary-button" type="button" onClick={onRunAIScan}>{isScanning ? "Scanning..." : "AI Scan"}</button>}
       />
-      <SearchPanel title="Search keyword" button={isScanning ? "Scanning..." : "AI Scan"} placeholder="Try: AI tools, finance hooks, Islamic productivity..." onAction={onRunAIScan} />
-      <FilterBar filters={["Platform", "Niche", "Score", "Period", "Search"]} />
-      <StatsGrid />
+      {activeSub.key !== "competitor-intelligence" && activeSub.key !== "ai-advisor" && (
+        <OpportunityFilterPanel
+          campaignOptions={campaignState.data ?? []}
+          categoryOptions={categoryState.data ?? []}
+          filters={filters}
+          showDemoFilters={showDemoFilters}
+          viewMode={viewMode}
+          onReset={resetFilters}
+          onToggle={() => setShowDemoFilters((value) => !value)}
+          onUpdate={updateFilter}
+          onViewModeChange={setViewMode}
+        />
+      )}
       <AIClipIntelligenceSubPage
         activeSub={activeSub}
-        lastScanned={lastScanned}
-        opportunities={opportunities}
-        savedOpportunities={savedOpportunities}
-        scanSummary={scanSummary}
+        competitorState={competitorState}
+        opportunityState={opportunityState}
+        opportunities={mappedOpportunities}
+        recommendationState={recommendationState}
+        viewMode={viewMode}
         onAnalyze={onAnalyze}
         onClip={onClip}
         onNavigate={onNavigate}
-        onSave={onSave}
+        onSave={saveFromApi}
       />
     </>
   );
@@ -762,105 +800,102 @@ function AIClipIntelligence({
 
 function AIClipIntelligenceSubPage({
   activeSub,
-  lastScanned,
+  competitorState,
+  opportunityState,
   opportunities,
-  savedOpportunities,
-  scanSummary,
+  recommendationState,
+  viewMode,
   onAnalyze,
   onClip,
   onNavigate,
   onSave
 }: {
   activeSub: SubNavItem;
-  lastScanned: string;
+  competitorState: ApiResourceState<ApiCompetitor[]>;
+  opportunityState: ApiResourceState<ApiOpportunity[]>;
   opportunities: VideoOpportunity[];
-  savedOpportunities: VideoOpportunity[];
-  scanSummary: string[];
+  recommendationState: ApiResourceState<ApiRecommendation[]>;
+  viewMode: ViewMode;
   onAnalyze: (item: VideoOpportunity) => void;
   onClip: (item: VideoOpportunity) => void;
   onNavigate: (path: string) => void;
-  onSave: (item: VideoOpportunity) => void;
+  onSave: (item: VideoOpportunity) => void | Promise<void>;
 }) {
   if (activeSub.key === "trend-discovery") {
     return (
-      <div className="section-grid two">
-        <InfoPanel title="Trend Discovery Signals" items={getAIItems(activeSub.key)} />
-        <section className="section-card">
-          <SectionTitle title="Fast Rising Demo Topics" action="Open Scanner" onAction={() => onNavigate("/ai-clip-intelligence/opportunity-scanner")} />
-          <div className="top-clip-list">
-            {opportunities.slice(0, 6).map((item, index) => (
-              <TopClipRow item={item} index={index + 1} onClip={onClip} key={item.id} />
-            ))}
-          </div>
-        </section>
-      </div>
+      <ApiStateView state={opportunityState} emptyTitle="No trend opportunities found" emptyDescription="Try adjusting keyword, platform, category, or date filters.">
+        {() => <OpportunityResults title="Trend Discovery" items={opportunities} viewMode={viewMode} onAnalyze={onAnalyze} onClip={onClip} onSave={onSave} />}
+      </ApiStateView>
     );
   }
 
   if (activeSub.key === "niche-explorer") {
     return (
-      <div className="section-grid two">
-        <InfoPanel title="Niche Explorer" items={getAIItems(activeSub.key)} />
-        <section className="section-card">
-          <SectionTitle title="Niche Engagement Preview" action="Analytics" onAction={() => onNavigate("/analytics/niche")} />
-          <AnalyticsChart variant="bar" />
-        </section>
-      </div>
+      <ApiStateView state={opportunityState} emptyTitle="No niche opportunities found" emptyDescription="Database returned no opportunities for the current niche filters.">
+        {() => <NicheExplorerResults items={opportunities} />}
+      </ApiStateView>
     );
   }
 
   if (activeSub.key === "opportunity-scanner") {
     return (
-      <>
-        <div className="section-grid three">
-          <InfoPanel title="Scanner Inputs" items={getAIItems(activeSub.key)} />
-          <InfoPanel title="AI Scan Summary" items={[`Last scanned: ${lastScanned}`, ...scanSummary]} />
-          <InfoPanel title="Demo Data Status" items={["Demo Data", "Ready", "Not Connected API", "Frontend scan sort"]} />
-        </div>
-        <section className="section-card">
-          <SectionTitle title="Scanned Opportunities" action="View Top 20" onAction={() => onNavigate("/ai-clip-intelligence/top-20-opportunities")} />
-          <VideoOpportunityTable items={opportunities} onAnalyze={onAnalyze} onClip={onClip} onSave={onSave} />
-        </section>
-      </>
+      <ApiStateView state={opportunityState} emptyTitle="No scanned opportunities found" emptyDescription="Database returned no records for the active scanner filters.">
+        {() => (
+          <OpportunityResults
+            title="Scanned Opportunities"
+            action="View Top 20"
+            items={opportunities}
+            viewMode={viewMode}
+            onAction={() => onNavigate("/ai-clip-intelligence/top-20-opportunities")}
+            onAnalyze={onAnalyze}
+            onClip={onClip}
+            onSave={onSave}
+          />
+        )}
+      </ApiStateView>
     );
   }
 
   if (activeSub.key === "competitor-intelligence") {
     return (
-      <div className="section-grid three">
-        <InfoPanel title="Competitor Intelligence" items={getAIItems(activeSub.key)} />
-        <InfoPanel title="Creator Benchmarks" items={opportunities.slice(0, 5).map((item) => `${item.channel}: ${item.engagement} engagement`)} />
-        <InfoPanel title="Content Gaps" items={["Short hooks", "Tutorial breakdowns", "Affiliate CTA clips", "Platform repost opportunities"]} />
-      </div>
+      <ApiStateView state={competitorState} emptyTitle="No competitors found" emptyDescription="Database returned no competitor profiles.">
+        {(items) => <CompetitorResults items={items} />}
+      </ApiStateView>
     );
   }
 
   if (activeSub.key === "ai-advisor") {
     return (
-      <div className="section-grid two">
-        <InfoPanel title="AI Advisor" items={getAIItems(activeSub.key)} />
-        <section className="section-card">
-          <SectionTitle title="Today Action Plan" action="Open Clip Studio" onAction={() => onNavigate("/clip-studio/source-video")} />
-          <div className="tag-cloud">
-            {recommendations.map((item) => (
-              <StatusBadge label={`${item.action}: ${item.status}`} tone={item.status === "Demo Data" ? "blue" : "amber"} key={item.action} />
-            ))}
-          </div>
-        </section>
-      </div>
+      <ApiStateView state={recommendationState} emptyTitle="No AI advisor recommendations found" emptyDescription="Database returned no dashboard recommendations for advisor view.">
+        {(items) => (
+          <section className="section-card">
+            <SectionTitle title="AI Advisor" action="Open Clip Studio" onAction={() => onNavigate("/clip-studio/source-video")} />
+            <RecommendationList items={items} />
+          </section>
+        )}
+      </ApiStateView>
     );
   }
 
-  const tableItems = activeSub.key === "saved-opportunities" ? savedOpportunities : opportunities;
   return (
-    <section className="section-card">
-      <SectionTitle title={activeSub.key === "saved-opportunities" ? "Saved Opportunities" : "Top 20 Opportunities"} action="View Saved" onAction={() => onNavigate("/ai-clip-intelligence/saved-opportunities")} />
-      {tableItems.length === 0 ? (
-        <EmptyState title="No saved opportunities yet" description="Click Save on any opportunity to store it here as Demo Data." />
-      ) : (
-        <VideoOpportunityTable items={tableItems} onAnalyze={onAnalyze} onClip={onClip} onSave={onSave} />
+    <ApiStateView
+      state={opportunityState}
+      emptyTitle={activeSub.key === "saved-opportunities" ? "No saved opportunities yet" : "No top opportunities found"}
+      emptyDescription={activeSub.key === "saved-opportunities" ? "Use Save on an opportunity to store it in the database." : "Database returned no opportunities for the Top 20 query."}
+    >
+      {() => (
+        <OpportunityResults
+          title={activeSub.key === "saved-opportunities" ? "Saved Opportunities" : "Top 20 Opportunities"}
+          action="View Saved"
+          items={opportunities}
+          viewMode={viewMode}
+          onAction={() => onNavigate("/ai-clip-intelligence/saved-opportunities")}
+          onAnalyze={onAnalyze}
+          onClip={onClip}
+          onSave={onSave}
+        />
       )}
-    </section>
+    </ApiStateView>
   );
 }
 
@@ -969,6 +1004,7 @@ function ContentLibrary({
   const [showDemoFilters, setShowDemoFilters] = useState(true);
   const [filters, setFilters] = useState<DemoFilterState>(defaultDemoFilters);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const categoryState = useApiResource<ApiCategory[]>("/api/ai-clip-intelligence/categories", true);
   const campaignOptions = useMemo(() => ["All", ...Array.from(new Set(contentItems.map((item) => item.campaign)))], [contentItems]);
   const filteredItems = useMemo(() => {
     const keyword = filters.keyword.trim().toLowerCase();
@@ -1007,6 +1043,7 @@ function ContentLibrary({
       />
       <DemoFilterPanel
         campaignOptions={campaignOptions}
+        categoryOptions={(categoryState.data ?? []).map((category) => category.name)}
         filters={filters}
         showDemoFilters={showDemoFilters}
         viewMode={viewMode}
@@ -1015,7 +1052,7 @@ function ContentLibrary({
         onUpdate={updateFilter}
         onViewModeChange={setViewMode}
       />
-      <ContentLibraryContent activeSub={activeSub} contentItems={filteredItems} onArchiveContent={onArchiveContent} onScheduleContent={onScheduleContent} viewMode={viewMode} />
+      <ContentLibraryContent activeSub={activeSub} categories={categoryState.data ?? []} contentItems={filteredItems} onArchiveContent={onArchiveContent} onScheduleContent={onScheduleContent} viewMode={viewMode} />
     </>
   );
 }
@@ -1103,8 +1140,294 @@ function ActiveSubmenuBar({ items, activePath, onNavigate }: { items: SubNavItem
   );
 }
 
+interface ApiResourceState<T> {
+  data: T | null;
+  error: string | null;
+  loading: boolean;
+  reload: () => void;
+}
+
+function ApiStateView<T extends unknown[]>({
+  state,
+  emptyTitle,
+  emptyDescription,
+  children
+}: {
+  state: ApiResourceState<T>;
+  emptyTitle: string;
+  emptyDescription: string;
+  children: (data: T) => ReactNode;
+}) {
+  if (state.loading) {
+    return <EmptyState title="Loading database data..." description="Fetching the latest records from the API." />;
+  }
+
+  if (state.error) {
+    return <EmptyState title="Unable to load database data" description={state.error} />;
+  }
+
+  if (!state.data || state.data.length === 0) {
+    return <EmptyState title={emptyTitle} description={emptyDescription} />;
+  }
+
+  return <>{children(state.data)}</>;
+}
+
+function ApiStateViewObject<T>({
+  state,
+  emptyTitle,
+  emptyDescription,
+  children
+}: {
+  state: ApiResourceState<T>;
+  emptyTitle: string;
+  emptyDescription: string;
+  children: (data: T) => ReactNode;
+}) {
+  if (state.loading) {
+    return <EmptyState title="Loading database data..." description="Fetching the latest records from the API." />;
+  }
+
+  if (state.error) {
+    return <EmptyState title="Unable to load database data" description={state.error} />;
+  }
+
+  if (!state.data) {
+    return <EmptyState title={emptyTitle} description={emptyDescription} />;
+  }
+
+  return <>{children(state.data)}</>;
+}
+
+function DashboardMetricGrid({ data }: { data: DashboardOverviewData }) {
+  const dashboardStats = [
+    { label: "Campaigns", value: String(data.totals.campaigns), delta: "Database campaigns", tone: "blue" as const },
+    { label: "Opportunities", value: String(data.totals.opportunities), delta: "AI Clip Intelligence", tone: "cyan" as const },
+    { label: "Saved", value: String(data.totals.savedOpportunities), delta: "Saved opportunities", tone: "green" as const },
+    { label: "Scheduled", value: String(data.totals.scheduledPosts), delta: "Publishing calendar", tone: "amber" as const },
+    { label: "Failed", value: String(data.totals.failedPosts), delta: "Needs attention", tone: "red" as const }
+  ];
+
+  return (
+    <section className="stats-grid">
+      {dashboardStats.map((stat) => (
+        <StatCard stat={stat} key={stat.label} />
+      ))}
+    </section>
+  );
+}
+
+function RecommendationList({ items }: { items: ApiRecommendation[] }) {
+  return (
+    <div className="recommendation-panel">
+      {items.map((item) => (
+        <article className="recommendation-row" key={item.id}>
+          <StatusBadge label={item.sourceType} tone={item.sourceType === "DEMO" ? "blue" : "slate"} />
+          <div>
+            <small>{item.priority} - {formatEnumLabel(item.recommendationType)}</small>
+            <strong>{item.title}</strong>
+            <span>{item.summary}</span>
+          </div>
+          {item.actionLabel && <StatusBadge label={item.actionLabel} tone="cyan" />}
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function OpportunityFilterPanel({
+  campaignOptions,
+  categoryOptions,
+  filters,
+  showDemoFilters,
+  viewMode,
+  onReset,
+  onToggle,
+  onUpdate,
+  onViewModeChange
+}: {
+  campaignOptions: ApiCampaign[];
+  categoryOptions: ApiCategory[];
+  filters: DemoFilterState;
+  showDemoFilters: boolean;
+  viewMode: ViewMode;
+  onReset: () => void;
+  onToggle: () => void;
+  onUpdate: <K extends keyof DemoFilterState>(key: K, value: DemoFilterState[K]) => void;
+  onViewModeChange: (mode: ViewMode) => void;
+}) {
+  return (
+    <section className="section-card demo-filter-card">
+      <div className="section-title">
+        <h2>Demo filters</h2>
+        <div className="row wrap">
+          <button className="secondary-button compact" type="button" onClick={onToggle}>{showDemoFilters ? "Hide Demo Filters" : "Show Demo Filters"}</button>
+          <button className="ghost-button compact" type="button" onClick={onReset}>Reset Filters</button>
+        </div>
+      </div>
+      {showDemoFilters && (
+        <div className="demo-filter-grid">
+          <label>
+            <span>Keyword</span>
+            <input value={filters.keyword} onChange={(event) => onUpdate("keyword", event.target.value)} placeholder="Search title, keyword, niche..." />
+          </label>
+          <label>
+            <span>Category</span>
+            <select value={filters.category} onChange={(event) => onUpdate("category", event.target.value)}>
+              <option value="Demo Data">Demo Data</option>
+              {categoryOptions.map((item) => (
+                <option value={item.slug} key={item.id}>{item.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Platform</span>
+            <select value={filters.platform} onChange={(event) => onUpdate("platform", event.target.value as PlatformFilter)}>
+              {(["All", "YouTube", "TikTok", "Instagram", "Facebook"] as const).map((item) => (
+                <option value={item} key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Status</span>
+            <select value={filters.status} onChange={(event) => onUpdate("status", event.target.value as StatusFilter)}>
+              {(["All", "Draft", "Ready", "Scheduled", "Published", "Failed", "Paused"] as const).map((item) => (
+                <option value={item} key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Date</span>
+            <input type="date" value={filters.date} onChange={(event) => onUpdate("date", event.target.value)} />
+          </label>
+          <label>
+            <span>Performance</span>
+            <select value={filters.performance} onChange={(event) => onUpdate("performance", event.target.value as PerformanceFilter)}>
+              {(["All", "High", "Medium", "Low"] as const).map((item) => (
+                <option value={item} key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Campaign</span>
+            <select value={filters.campaign} onChange={(event) => onUpdate("campaign", event.target.value)}>
+              <option value="All">All</option>
+              {campaignOptions.map((item) => (
+                <option value={item.slug} key={item.id}>{item.name}</option>
+              ))}
+            </select>
+          </label>
+          <div className="view-toggle" aria-label="Grid/List view mode">
+            <span>Grid/List</span>
+            <button className={viewMode === "grid" ? "active" : ""} type="button" onClick={() => onViewModeChange("grid")}>Grid</button>
+            <button className={viewMode === "list" ? "active" : ""} type="button" onClick={() => onViewModeChange("list")}>List</button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function OpportunityResults({
+  title,
+  action,
+  items,
+  viewMode,
+  onAction,
+  onAnalyze,
+  onClip,
+  onSave
+}: {
+  title: string;
+  action?: string;
+  items: VideoOpportunity[];
+  viewMode: ViewMode;
+  onAction?: () => void;
+  onAnalyze: (item: VideoOpportunity) => void;
+  onClip: (item: VideoOpportunity) => void;
+  onSave: (item: VideoOpportunity) => void | Promise<void>;
+}) {
+  return (
+    <section className="section-card">
+      <SectionTitle title={title} action={action ?? (viewMode === "grid" ? "Grid View" : "List View")} onAction={onAction} />
+      {items.length === 0 ? (
+        <EmptyState title="Tidak ada data yang cocok dengan filter saat ini." description="Adjust filters or reset the database query." />
+      ) : viewMode === "grid" ? (
+        <div className="opportunity-grid">
+          {items.map((item) => (
+            <VideoOpportunityCard item={item} onClip={onClip} onSave={onSave} key={item.id} />
+          ))}
+        </div>
+      ) : (
+        <VideoOpportunityTable items={items} onAnalyze={onAnalyze} onClip={onClip} onSave={onSave} />
+      )}
+    </section>
+  );
+}
+
+function NicheExplorerResults({ items }: { items: VideoOpportunity[] }) {
+  const counts = items.reduce<Record<string, number>>((acc, item) => {
+    acc[item.niche] = (acc[item.niche] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  return (
+    <div className="section-grid two">
+      <section className="section-card">
+        <SectionTitle title="Niche Explorer" />
+        <div className="tag-cloud">
+          {Object.entries(counts).map(([niche, count]) => (
+            <StatusBadge label={`${niche}: ${count}`} tone="blue" key={niche} />
+          ))}
+        </div>
+      </section>
+      <section className="section-card">
+        <SectionTitle title="Highest Opportunity By Niche" />
+        <div className="top-clip-list">
+          {items.slice(0, 8).map((item, index) => (
+            <TopClipRow item={item} index={index + 1} onClip={() => undefined} key={item.id} />
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CompetitorResults({ items }: { items: ApiCompetitor[] }) {
+  return (
+    <div className="section-grid three">
+      {items.map((item) => (
+        <section className="section-card" key={item.id}>
+          <SectionTitle title={item.name} />
+          <div className="tag-cloud">
+            <StatusBadge label={item.sourceType} tone={item.sourceType === "DEMO" ? "blue" : "slate"} />
+            <StatusBadge label={formatEnumLabel(item.platform)} tone="cyan" />
+            <StatusBadge label={item.niche} tone="slate" />
+          </div>
+          <p className="muted">{item.handle ?? item.profileUrl ?? "No handle provided"}</p>
+          <div className="compact-grid" style={{ marginTop: 12 }}>
+            <article className="mini-stat">
+              <span>Followers</span>
+              <strong>{formatNumber(item.followers)}</strong>
+            </article>
+            <article className="mini-stat">
+              <span>Avg Views</span>
+              <strong>{formatNumber(item.avgViews)}</strong>
+            </article>
+            <article className="mini-stat">
+              <span>Engagement</span>
+              <strong>{item.avgEngagement ?? 0}%</strong>
+            </article>
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 function DemoFilterPanel({
   campaignOptions,
+  categoryOptions,
   filters,
   showDemoFilters,
   viewMode,
@@ -1114,6 +1437,7 @@ function DemoFilterPanel({
   onViewModeChange
 }: {
   campaignOptions: string[];
+  categoryOptions: string[];
   filters: DemoFilterState;
   showDemoFilters: boolean;
   viewMode: ViewMode;
@@ -1142,7 +1466,7 @@ function DemoFilterPanel({
           <label>
             <span>Category</span>
             <select value={filters.category} onChange={(event) => onUpdate("category", event.target.value)}>
-              {categories.map((item) => (
+              {["Demo Data", ...categoryOptions.filter((item) => item !== "Demo Data")].map((item) => (
                 <option value={item} key={item}>{item}</option>
               ))}
             </select>
@@ -1190,21 +1514,6 @@ function DemoFilterPanel({
           </div>
         </div>
       )}
-    </section>
-  );
-}
-
-function SearchPanel({ title, placeholder, button, onAction }: { title: string; placeholder: string; button: string; onAction?: () => void }) {
-  return (
-    <section className="section-card search-panel">
-      <div>
-        <StatusBadge label="Demo Data" tone="blue" />
-        <h2>{title}</h2>
-      </div>
-      <div className="url-row">
-        <input placeholder={placeholder} />
-        <button className="primary-button" type="button" onClick={onAction}>{button}</button>
-      </div>
     </section>
   );
 }
@@ -1390,12 +1699,14 @@ function CampaignContent({
 
 function ContentLibraryContent({
   activeSub,
+  categories,
   contentItems,
   onArchiveContent,
   onScheduleContent,
   viewMode
 }: {
   activeSub: SubNavItem;
+  categories: ApiCategory[];
   contentItems: ContentItem[];
   onArchiveContent: (item: ContentItem) => void;
   onScheduleContent: (item: ContentItem) => void;
@@ -1412,7 +1723,7 @@ function ContentLibraryContent({
             <span>Category</span>
             <select defaultValue="Demo Data">
               {categories.map((item) => (
-                <option value={item} key={item}>{item}</option>
+                <option value={item.slug} key={item.id}>{item.name}</option>
               ))}
             </select>
           </label>
@@ -1722,20 +2033,6 @@ function InfoPanel({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-function getAIItems(key: string) {
-  const map: Record<string, string[]> = {
-    "trend-discovery": ["Trending topics", "Trending videos", "Trending creators", "Trending keywords"],
-    "niche-explorer": niches,
-    "opportunity-scanner": ["Viral Score", "Growth Score", "Engagement Score", "Competition Score", "Clipping Score"],
-    "competitor-intelligence": ["Channel velocity", "Posting cadence", "Winning hooks", "Format gaps"],
-    "ai-advisor": ["Best topic: AI workflows", "Best format: checklist", "Best platform: TikTok", "Next action: create 6 clips"],
-    "top-20-opportunities": ["Thumbnail", "Title", "Channel", "Platform", "Views", "Engagement", "Viral Score", "Clipping Score", "Niche", "Status"],
-    "saved-opportunities": ["Saved clips", "Saved niches", "Saved competitor scans", "Saved AI notes"]
-  };
-
-  return map[key] ?? map["trend-discovery"];
-}
-
 function getRouteFromPath(pathname: string): { page: PageId; path: string } {
   const normalized = normalizePath(pathname);
   const allPaths = navItems.flatMap((item) => [item.path, ...item.submenu.map((sub) => sub.path)]);
@@ -1762,6 +2059,57 @@ function getContentPerformance(item: ContentItem): "High" | "Medium" | "Low" {
   }
 
   return "Low";
+}
+
+function useApiResource<T>(url: string, enabled: boolean): ApiResourceState<T> {
+  const [data, setData] = useState<T | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
+    const controller = new AbortController();
+    setLoading(true);
+    setError(null);
+
+    fetchApiData<T>(url, { signal: controller.signal })
+      .then((value) => {
+        setData(value);
+      })
+      .catch((caught) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        setData(null);
+        setError(caught instanceof Error ? caught.message : "Failed to load API data");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [enabled, reloadKey, url]);
+
+  return {
+    data,
+    error,
+    loading,
+    reload: () => setReloadKey((value) => value + 1)
+  };
+}
+
+function formatNumber(value?: number | null) {
+  if (value === undefined || value === null) {
+    return "0";
+  }
+
+  return Intl.NumberFormat("en", { notation: "compact" }).format(value);
 }
 
 function normalizePath(pathname: string) {

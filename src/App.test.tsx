@@ -1,12 +1,113 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { navItems, opportunities } from "./data/ai-clipper-demo";
+
+const apiCategories = [
+  { id: "cat-ai", name: "AI", slug: "ai", isActive: true, sourceType: "DEMO" },
+  { id: "cat-business", name: "Business", slug: "business", isActive: true, sourceType: "DEMO" }
+];
+
+const apiCampaigns = [
+  {
+    id: "campaign-ai",
+    name: "AI Tools Ramadan Launch",
+    slug: "ai-tools-ramadan-launch",
+    platform: "TIKTOK",
+    status: "READY",
+    startDate: "2026-06-18T00:00:00.000Z",
+    endDate: "2026-07-02T00:00:00.000Z",
+    sourceType: "DEMO",
+    _count: { opportunities: 12, publishingSchedules: 4 }
+  }
+];
+
+const apiOpportunities = opportunities.map((item, index) => ({
+  id: item.id,
+  title: item.title,
+  slug: item.id,
+  description: item.analysis,
+  niche: item.niche,
+  keyword: item.niche.toLowerCase(),
+  platform: item.platform.toUpperCase(),
+  status: item.status === "New" || item.status === "Analyzed" || item.status === "Saved" ? "READY" : item.status.toUpperCase(),
+  performanceLevel: index < 10 ? "HIGH" : index < 16 ? "MEDIUM" : "LOW",
+  opportunityScore: item.clippingScore,
+  trendScore: item.viralScore,
+  competitionScore: 40 + (index % 20),
+  viralPotentialScore: item.viralScore,
+  aiRecommendation: item.analysis,
+  hookIdeas: ["Hook"],
+  contentAngles: ["Angle"],
+  thumbnailIdeas: null,
+  sourceUrl: null,
+  sourceType: "DEMO",
+  isSaved: index === 0,
+  savedAt: index === 0 ? "2026-06-18T00:00:00.000Z" : null,
+  categoryId: "cat-ai",
+  campaignId: "campaign-ai",
+  category: apiCategories[0],
+  campaign: apiCampaigns[0],
+  createdAt: "2026-06-18T00:00:00.000Z"
+}));
+
+function mockApiResponse(url: string, init?: RequestInit) {
+  if (init?.method === "PATCH") {
+    return { data: { ...apiOpportunities[0], isSaved: !apiOpportunities[0].isSaved } };
+  }
+
+  if (url.includes("/api/ai-clip-intelligence/categories")) {
+    return { data: apiCategories };
+  }
+  if (url.includes("/api/dashboard/campaigns")) {
+    return { data: apiCampaigns };
+  }
+  if (url.includes("/api/dashboard/overview")) {
+    return {
+      data: {
+        totals: { campaigns: 1, opportunities: apiOpportunities.length, savedOpportunities: 1, scheduledPosts: 1, publishedPosts: 1, failedPosts: 0 },
+        topCategories: [{ ...apiCategories[0], opportunities: apiOpportunities.length }],
+        latestRecommendations: []
+      }
+    };
+  }
+  if (url.includes("/api/dashboard/recommendations")) {
+    return { data: [] };
+  }
+  if (url.includes("/api/dashboard/publishing-calendar")) {
+    return { data: [] };
+  }
+  if (url.includes("/api/ai-clip-intelligence/competitors")) {
+    return { data: [] };
+  }
+  if (url.includes("/api/ai-clip-intelligence/opportunities")) {
+    const parsed = new URL(url, "http://localhost");
+    let rows = [...apiOpportunities];
+    if (parsed.searchParams.get("saved") === "true") {
+      rows = rows.filter((item) => item.isSaved);
+    }
+    if (parsed.searchParams.get("sort") === "opportunityScore_desc") {
+      rows.sort((a, b) => b.opportunityScore - a.opportunityScore);
+    }
+    const limit = Number(parsed.searchParams.get("limit"));
+    return { data: Number.isFinite(limit) && limit > 0 ? rows.slice(0, limit) : rows };
+  }
+
+  return { data: [] };
+}
 
 describe("FVN AI Clipper app", () => {
   beforeEach(() => {
     localStorage.clear();
     window.history.pushState({}, "", "/dashboard");
+    vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      return Promise.resolve(new Response(JSON.stringify(mockApiResponse(url, init)), { status: 200, headers: { "content-type": "application/json" } }));
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("renders the primary navigation and dashboard", () => {
@@ -35,14 +136,14 @@ describe("FVN AI Clipper app", () => {
     expect(sidebarMenu).not.toContain("Campaign Validation");
   });
 
-  it("runs the demo clip workflow into library and scheduler", () => {
+  it("runs the database clip workflow into library and scheduler", async () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole("button", { name: "AI Clip Intelligence" }));
     fireEvent.click(screen.getAllByRole("button", { name: "Top 20 Opportunities" })[0]);
-    fireEvent.click(screen.getAllByRole("button", { name: "Clip This" })[0]);
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "Clip This Video" }).length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByRole("button", { name: "Clip This Video" })[0]);
 
-    expect(screen.getByText("AI tools for small business growth in 2026")).toBeInTheDocument();
     expect(window.location.pathname).toBe("/clip-studio/source-video");
 
     fireEvent.click(screen.getByRole("button", { name: "Generate Demo Clips" }));
@@ -60,15 +161,16 @@ describe("FVN AI Clipper app", () => {
     expect(screen.getByText(/Hook A - Scheduled|AI CRM in 30 seconds - Scheduled/)).toBeInTheDocument();
   });
 
-  it("keeps dashboard opportunities compact and opens all top 20 opportunities", () => {
+  it("loads dashboard overview and opens database top 20 opportunities", async () => {
     const { container } = render(<App />);
 
-    expect(container.querySelectorAll(".table-wrap tbody tr")).toHaveLength(5);
+    await waitFor(() => expect(screen.getByText("Opportunities")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "AI Clip Intelligence" }));
     fireEvent.click(screen.getAllByRole("button", { name: "Top 20 Opportunities" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "List" }));
 
-    expect(container.querySelectorAll(".table-wrap tbody tr")).toHaveLength(opportunities.length);
+    await waitFor(() => expect(container.querySelectorAll(".table-wrap tbody tr")).toHaveLength(opportunities.length));
     expect(opportunities).toHaveLength(20);
   });
 

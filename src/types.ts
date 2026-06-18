@@ -39,23 +39,42 @@ export interface VideoOpportunity {
   channel: string;
   platform: string;
   niche: string;
-  status: "New" | "Saved" | "Analyzed" | "Ready";
+  status: "New" | "Saved" | "Analyzed" | "Ready" | "Draft" | "Scheduled" | "Published" | "Failed" | "Paused";
   views: string;
   engagement: string;
   viralScore: number;
   clippingScore: number;
   analysis: string;
   thumbnail: string;
+  slug?: string;
+  description?: string | null;
+  keyword?: string;
+  sourceType?: "DEMO" | "MANUAL" | "CSV_IMPORT" | "REAL_API";
+  isSaved?: boolean;
+  savedAt?: string | null;
+  categoryId?: string | null;
+  campaignId?: string | null;
+  categorySlug?: string;
+  campaignSlug?: string;
+  aiRecommendation?: string;
+  opportunityScore?: number;
+  trendScore?: number;
+  competitionScore?: number;
+  performanceLevel?: "HIGH" | "MEDIUM" | "LOW";
 }
 
 export interface Campaign {
+  id?: string;
   name: string;
+  slug?: string;
+  description?: string | null;
   platform: string;
   start: string;
   end: string;
   progress: number;
   compliance: number;
-  status: "Active" | "Draft" | "Completed" | "Warning";
+  status: "Active" | "Draft" | "Ready" | "Scheduled" | "Published" | "Failed" | "Paused" | "Completed" | "Warning";
+  sourceType?: "DEMO" | "MANUAL" | "CSV_IMPORT" | "REAL_API";
 }
 
 export interface ContentItem {
@@ -101,7 +120,9 @@ export interface ScheduleItem {
   platform: string;
   day: string;
   time: string;
-  status: "Draft" | "Ready" | "Scheduled" | "Published";
+  status: "Draft" | "Ready" | "Scheduled" | "Published" | "Failed" | "Paused";
+  scheduledAt?: string;
+  sourceType?: "DEMO" | "MANUAL" | "CSV_IMPORT" | "REAL_API";
 }
 
 export interface AIRecommendation {

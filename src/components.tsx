@@ -291,14 +291,14 @@ export function FilterBar({ filters }: { filters: string[] }) {
   );
 }
 
-export function VideoOpportunityCard({ item, onClip, onSave }: { item: VideoOpportunity; onClip: (item: VideoOpportunity) => void; onSave?: (item: VideoOpportunity) => void }) {
+export function VideoOpportunityCard({ item, onClip, onSave }: { item: VideoOpportunity; onClip: (item: VideoOpportunity) => void; onSave?: (item: VideoOpportunity) => void | Promise<void> }) {
   return (
     <article className="opportunity-card">
       <div className="thumb">{item.thumbnail}</div>
       <div className="opportunity-body">
         <div className="row between gap">
           <SocialIcon platform={item.platform} />
-          <StatusBadge label="Demo Data" tone="slate" />
+          {item.sourceType && <StatusBadge label={item.sourceType} tone={item.sourceType === "DEMO" ? "blue" : "slate"} />}
           <ScoreBadge score={item.viralScore} label="Viral" />
         </div>
         <h3>{item.title}</h3>
@@ -308,7 +308,7 @@ export function VideoOpportunityCard({ item, onClip, onSave }: { item: VideoOppo
           <button className="primary-button compact" type="button" onClick={() => onClip(item)}>
             Clip This Video
           </button>
-          <button className="secondary-button compact" type="button" onClick={() => onSave?.(item)}>Save Opportunity</button>
+          <button className="secondary-button compact" type="button" onClick={() => onSave?.(item)}>{item.isSaved ? "Unsave Opportunity" : "Save Opportunity"}</button>
         </div>
       </div>
     </article>
@@ -323,7 +323,7 @@ export function VideoOpportunityTable({
 }: {
   items: VideoOpportunity[];
   onClip: (item: VideoOpportunity) => void;
-  onSave: (item: VideoOpportunity) => void;
+  onSave: (item: VideoOpportunity) => void | Promise<void>;
   onAnalyze: (item: VideoOpportunity) => void;
 }) {
   return (
@@ -362,7 +362,12 @@ export function VideoOpportunityTable({
               <td>{item.views}</td>
               <td>{item.engagement}</td>
               <td>{item.niche}</td>
-              <td><StatusBadge label={item.status} tone={item.status === "Ready" ? "green" : item.status === "Saved" ? "blue" : "slate"} /></td>
+              <td>
+                <div className="score-stack">
+                  <StatusBadge label={item.status} tone={getStatusTone(item.status)} />
+                  {item.sourceType && <StatusBadge label={item.sourceType} tone={item.sourceType === "DEMO" ? "blue" : "slate"} />}
+                </div>
+              </td>
               <td>
                 <div className="score-stack">
                   <ScoreBadge score={item.viralScore} label="Viral" />
@@ -375,7 +380,7 @@ export function VideoOpportunityTable({
                   <button className="primary-button compact" type="button" onClick={() => onClip(item)}>
                     Clip This
                   </button>
-                  <button className="secondary-button compact" type="button" onClick={() => onSave(item)}>Save</button>
+                  <button className="secondary-button compact" type="button" onClick={() => onSave(item)}>{item.isSaved ? "Unsave" : "Save"}</button>
                   <button className="ghost-button compact" type="button" onClick={() => onAnalyze(item)}>Analyze</button>
                 </div>
               </td>
@@ -755,6 +760,14 @@ function Progress({ label, value }: { label: string; value: number }) {
       </div>
     </div>
   );
+}
+
+function getStatusTone(status: string): StatusTone {
+  if (status === "Ready" || status === "Published") return "green";
+  if (status === "Saved" || status === "Scheduled") return "blue";
+  if (status === "Draft" || status === "Paused") return "amber";
+  if (status === "Failed") return "red";
+  return "slate";
 }
 
 function getPlatformKey(platform: string) {
