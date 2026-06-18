@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { App } from "./App";
-import { navItems } from "./data/ai-clipper-demo";
+import { navItems, opportunities } from "./data/ai-clipper-demo";
 
 describe("FVN AI Clipper app", () => {
   beforeEach(() => {
@@ -58,6 +58,18 @@ describe("FVN AI Clipper app", () => {
     fireEvent.click(screen.getByRole("button", { name: "Scheduler" }));
     fireEvent.click(screen.getAllByRole("button", { name: "Content Queue" })[0]);
     expect(screen.getByText(/Hook A - Scheduled|AI CRM in 30 seconds - Scheduled/)).toBeInTheDocument();
+  });
+
+  it("keeps dashboard opportunities compact and opens all top 20 opportunities", () => {
+    const { container } = render(<App />);
+
+    expect(container.querySelectorAll(".table-wrap tbody tr")).toHaveLength(5);
+
+    fireEvent.click(screen.getByRole("button", { name: "AI Clip Intelligence" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Top 20 Opportunities" })[0]);
+
+    expect(container.querySelectorAll(".table-wrap tbody tr")).toHaveLength(opportunities.length);
+    expect(opportunities).toHaveLength(20);
   });
 
   it("opens critical submenus and shows scheduler multi account status", () => {

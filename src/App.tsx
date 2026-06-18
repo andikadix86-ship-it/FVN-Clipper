@@ -63,6 +63,16 @@ export function App() {
   const [scheduleList, setScheduleList] = usePersistentState<ScheduleItem[]>(SCHEDULES_KEY, defaultSchedules);
   const [accountList, setAccountList] = usePersistentState<Account[]>(ACCOUNTS_KEY, defaultAccounts);
   const [approvalStatus, setApprovalStatus] = usePersistentState<"Pending" | "Approved" | "Rejected">(APPROVAL_STATUS_KEY, "Pending");
+  const [opportunityList, setOpportunityList] = useState<VideoOpportunity[]>(opportunities);
+  const [isScanning, setIsScanning] = useState(false);
+  const [lastScanned, setLastScanned] = useState("Not scanned yet");
+  const [scanSummary, setScanSummary] = useState<string[]>(["New opportunities found: 0", "Best niche: Demo Data", "Best platform: Demo Data", "Average clipping score: 0"]);
+  const [analysisTarget, setAnalysisTarget] = useState<VideoOpportunity | null>(null);
+  const [addAccountOpen, setAddAccountOpen] = useState(false);
+  const [accountPlatform, setAccountPlatform] = useState("YouTube");
+  const [accountName, setAccountName] = useState("");
+  const [accountHandle, setAccountHandle] = useState("");
+  const [connectionMode, setConnectionMode] = useState<"Demo Connect" | "OAuth Placeholder">("Demo Connect");
   const [toast, setToast] = useState("UI ready");
 
   const activeNav = useMemo(() => navItems.find((item) => item.id === activePage) ?? navItems[0], [activePage]);
@@ -104,11 +114,30 @@ export function App() {
   };
 
   const analyzeOpportunity = (item: VideoOpportunity) => {
+    setAnalysisTarget(item);
     setSavedOpportunities((current) => {
       const analyzed = { ...item, status: "Analyzed" as const };
       return current.some((opportunity) => opportunity.id === item.id) ? current.map((opportunity) => (opportunity.id === item.id ? analyzed : opportunity)) : [...current, analyzed];
     });
     showToast(`Analyzed opportunity: ${item.title}`);
+  };
+
+  const runAIScan = () => {
+    setIsScanning(true);
+    setTimeout(() => {
+      const sorted = [...opportunityList].sort((a, b) => b.clippingScore - a.clippingScore);
+      const average = Math.round(sorted.reduce((total, item) => total + item.clippingScore, 0) / sorted.length);
+      setOpportunityList(sorted);
+      setLastScanned(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+      setScanSummary([
+        `New opportunities found: ${sorted.length}`,
+        `Best niche: ${sorted[0]?.niche ?? "Demo Data"}`,
+        `Best platform: ${sorted[0]?.platform ?? "Demo Data"}`,
+        `Average clipping score: ${average}`
+      ]);
+      setIsScanning(false);
+      showToast("AI scan completed");
+    }, 900);
   };
 
   const generateDemoClips = () => {
@@ -200,6 +229,11 @@ export function App() {
     showToast(`Scheduled ${item.title}`);
   };
 
+  const archiveContent = (item: ContentItem) => {
+    setContentLibrary((current) => current.map((content) => (content.title === item.title ? { ...content, status: "Archived", metric: "Archived" } : content)));
+    showToast(`Archived ${item.title}`);
+  };
+
   const toggleAccount = (account: Account) => {
     setAccountList((current) =>
       current.map((item) =>
@@ -216,9 +250,48 @@ export function App() {
     showToast(`${account.name} status toggled`);
   };
 
+  const refreshAccount = (account: Account) => {
+    setAccountList((current) => current.map((item) => (item.name === account.name ? { ...item, lastSync: "Just now", health: item.status === "Connected" ? "Ready" : "OAuth required" } : item)));
+    showToast(`Refreshed ${account.name}`);
+  };
+
+  const connectAccountFromModal = () => {
+    const name = accountName.trim() || `${accountPlatform} Demo`;
+    const status = connectionMode === "Demo Connect" ? "Connected" : "Not Connected";
+    setAccountList((current) => [
+      {
+        name,
+        platform: accountPlatform,
+        status,
+        health: connectionMode === "Demo Connect" ? `Demo connected ${accountHandle || "account"}` : "OAuth placeholder not configured",
+        lastSync: connectionMode === "Demo Connect" ? "Just now" : "Never"
+      },
+      ...current
+    ]);
+    setAddAccountOpen(false);
+    setAccountName("");
+    setAccountHandle("");
+    showToast(connectionMode === "Demo Connect" ? "Account connected" : "OAuth is not configured yet");
+  };
+
   const updateApprovalStatus = (status: "Pending" | "Approved" | "Rejected") => {
     setApprovalStatus(status);
     showToast(`Approval status: ${status}`);
+  };
+
+  const handleCreateSelect = (action: "clip" | "campaign" | "schedule" | "account" | "scan") => {
+    if (action === "clip") {
+      navigate("/clip-studio/source-video");
+    } else if (action === "campaign") {
+      navigate("/campaign-clipper/create");
+    } else if (action === "schedule") {
+      navigate("/scheduler/publishing-calendar");
+    } else if (action === "account") {
+      setAddAccountOpen(true);
+    } else {
+      navigate("/ai-clip-intelligence/top-20-opportunities");
+      runAIScan();
+    }
   };
 
   return (
@@ -233,7 +306,7 @@ export function App() {
         onNavigate={navigate}
       />
       <div className={`app-main ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
-        <AppHeader title={activeNav.label} path={activePath} onOpenMobile={() => setMobileOpen(true)} onAction={showToast} />
+        <AppHeader title={activeNav.label} path={activePath} onOpenMobile={() => setMobileOpen(true)} onAction={showToast} onCreateSelect={handleCreateSelect} />
         <main className="content-layout">
           <section className="page-content">
             <ActiveSubmenuBar items={activeNav.submenu} activePath={activePath} onNavigate={navigate} />
@@ -253,17 +326,40 @@ export function App() {
               onClip={clipVideo}
               onGenerateClips={generateDemoClips}
               onNavigate={navigate}
+              onOpenAddAccount={() => setAddAccountOpen(true)}
+              onRefreshAccount={refreshAccount}
+              onRunAIScan={runAIScan}
+              onArchiveContent={archiveContent}
               onSaveClipToCampaign={saveClipToCampaign}
               onSaveClipToLibrary={saveClipToLibrary}
               onSaveOpportunity={saveOpportunity}
               onScheduleContent={scheduleContent}
               onToggleAccount={toggleAccount}
               onUpdateApproval={updateApprovalStatus}
+              isScanning={isScanning}
+              lastScanned={lastScanned}
+              opportunityList={opportunityList}
+              scanSummary={scanSummary}
             />
           </section>
           <RightPanel accounts={accountList} />
         </main>
       </div>
+      {analysisTarget && <AnalysisModal item={analysisTarget} onClose={() => setAnalysisTarget(null)} />}
+      {addAccountOpen && (
+        <AddAccountModal
+          accountHandle={accountHandle}
+          accountName={accountName}
+          connectionMode={connectionMode}
+          platform={accountPlatform}
+          onCancel={() => setAddAccountOpen(false)}
+          onConnect={connectAccountFromModal}
+          onHandleChange={setAccountHandle}
+          onModeChange={setConnectionMode}
+          onNameChange={setAccountName}
+          onPlatformChange={setAccountPlatform}
+        />
+      )}
       <div className="toast" role="status">{toast}</div>
     </AppShell>
   );
@@ -282,15 +378,23 @@ function PageRouter({
   selectedSource,
   onAnalyze,
   onAddCampaignDraft,
+  onArchiveContent,
   onClip,
   onGenerateClips,
   onNavigate,
+  onOpenAddAccount,
+  onRefreshAccount,
+  onRunAIScan,
   onSaveClipToCampaign,
   onSaveClipToLibrary,
   onSaveOpportunity,
   onScheduleContent,
   onToggleAccount,
-  onUpdateApproval
+  onUpdateApproval,
+  isScanning,
+  lastScanned,
+  opportunityList,
+  scanSummary
 }: {
   activePage: PageId;
   activeSub: SubNavItem;
@@ -304,19 +408,41 @@ function PageRouter({
   selectedSource: VideoOpportunity | null;
   onAnalyze: (item: VideoOpportunity) => void;
   onAddCampaignDraft: () => void;
+  onArchiveContent: (item: ContentItem) => void;
   onClip: (item: VideoOpportunity) => void;
   onGenerateClips: () => void;
   onNavigate: (path: string) => void;
+  onOpenAddAccount: () => void;
+  onRefreshAccount: (account: Account) => void;
+  onRunAIScan: () => void;
   onSaveClipToCampaign: (clip: GeneratedClip) => void;
   onSaveClipToLibrary: (clip: GeneratedClip) => void;
   onSaveOpportunity: (item: VideoOpportunity) => void;
   onScheduleContent: (item: ContentItem) => void;
   onToggleAccount: (account: Account) => void;
   onUpdateApproval: (status: "Pending" | "Approved" | "Rejected") => void;
+  isScanning: boolean;
+  lastScanned: string;
+  opportunityList: VideoOpportunity[];
+  scanSummary: string[];
 }) {
   switch (activePage) {
     case "ai-clip-intelligence":
-      return <AIClipIntelligence activeSub={activeSub} savedOpportunities={savedOpportunities} onAnalyze={onAnalyze} onClip={onClip} onSave={onSaveOpportunity} />;
+      return (
+        <AIClipIntelligence
+          activeSub={activeSub}
+          isScanning={isScanning}
+          lastScanned={lastScanned}
+          opportunities={opportunityList}
+          savedOpportunities={savedOpportunities}
+          scanSummary={scanSummary}
+          onAnalyze={onAnalyze}
+          onClip={onClip}
+          onNavigate={onNavigate}
+          onRunAIScan={onRunAIScan}
+          onSave={onSaveOpportunity}
+        />
+      );
     case "clip-studio":
       return (
         <ClipStudio
@@ -332,32 +458,36 @@ function PageRouter({
     case "campaign-clipper":
       return <CampaignClipper activeSub={activeSub} campaigns={campaignList} generatedClips={generatedClips} onAddCampaignDraft={onAddCampaignDraft} />;
     case "content-library":
-      return <ContentLibrary activeSub={activeSub} contentItems={contentLibrary} onScheduleContent={onScheduleContent} />;
+      return <ContentLibrary activeSub={activeSub} contentItems={contentLibrary} onArchiveContent={onArchiveContent} onScheduleContent={onScheduleContent} />;
     case "scheduler":
-      return <Scheduler activeSub={activeSub} accounts={accountList} approvalStatus={approvalStatus} schedules={scheduleList} onToggleAccount={onToggleAccount} onUpdateApproval={onUpdateApproval} />;
+      return <Scheduler activeSub={activeSub} accounts={accountList} approvalStatus={approvalStatus} schedules={scheduleList} onOpenAddAccount={onOpenAddAccount} onRefreshAccount={onRefreshAccount} onToggleAccount={onToggleAccount} onUpdateApproval={onUpdateApproval} />;
     case "analytics":
       return <Analytics activeSub={activeSub} contentCount={contentLibrary.length} scheduleCount={scheduleList.length} />;
     case "settings":
       return <Settings activeSub={activeSub} />;
     case "dashboard":
     default:
-      return <Dashboard accounts={accountList} campaigns={campaignList} schedules={scheduleList} onAnalyze={onAnalyze} onClip={onClip} onSave={onSaveOpportunity} />;
+      return <Dashboard accounts={accountList} campaigns={campaignList} opportunities={opportunityList} schedules={scheduleList} onAnalyze={onAnalyze} onClip={onClip} onNavigate={onNavigate} onSave={onSaveOpportunity} />;
   }
 }
 
 function Dashboard({
   accounts,
   campaigns,
+  opportunities,
   schedules,
   onAnalyze,
   onClip,
+  onNavigate,
   onSave
 }: {
   accounts: Account[];
   campaigns: Campaign[];
+  opportunities: VideoOpportunity[];
   schedules: ScheduleItem[];
   onAnalyze: (item: VideoOpportunity) => void;
   onClip: (item: VideoOpportunity) => void;
+  onNavigate: (path: string) => void;
   onSave: (item: VideoOpportunity) => void;
 }) {
   return (
@@ -366,30 +496,30 @@ function Dashboard({
         eyebrow="Dashboard - Demo Data"
         title="Welcome back, Andika"
         description="A clean command center for finding video opportunities, generating clips, managing campaigns, and publishing to connected accounts."
-        actions={<button className="primary-button" type="button">Clip This</button>}
+        actions={<button className="primary-button" type="button" onClick={() => onNavigate("/clip-studio/source-video")}>Clip This</button>}
       />
       <StatsGrid />
       <div className="section-grid two">
         <section className="section-card large">
-          <SectionTitle title="Content Performance Chart" action="View All" />
+          <SectionTitle title="Content Performance Chart" action="View All" onAction={() => onNavigate("/analytics/overview")} />
           <AnalyticsChart />
         </section>
         <section className="section-card">
-          <SectionTitle title="Recent Activities" action="View All" />
+          <SectionTitle title="Recent Activities" action="View All" onAction={() => onNavigate("/analytics/ai-insights")} />
           <ActivityFeed items={activities} />
         </section>
       </div>
       <section className="section-card">
-        <SectionTitle title="Top 20 Video Opportunities" action="View All" />
-        <VideoOpportunityTable items={opportunities} onAnalyze={onAnalyze} onClip={onClip} onSave={onSave} />
+        <SectionTitle title="Top 20 Video Opportunities" action="View All" onAction={() => onNavigate("/ai-clip-intelligence/top-20-opportunities")} />
+        <VideoOpportunityTable items={opportunities.slice(0, 5)} onAnalyze={onAnalyze} onClip={onClip} onSave={onSave} />
       </section>
       <div className="section-grid two">
         <section className="section-card">
-          <SectionTitle title="Upcoming Schedule" action="View Calendar" />
+          <SectionTitle title="Upcoming Schedule" action="View Calendar" onAction={() => onNavigate("/scheduler/publishing-calendar")} />
           <CalendarPreview schedules={schedules} />
         </section>
         <section className="section-card">
-          <SectionTitle title="Campaign Overview" action="View All Campaigns" />
+          <SectionTitle title="Campaign Overview" action="View All Campaigns" onAction={() => onNavigate("/campaign-clipper/library")} />
           <div className="campaign-list">
             {campaigns.slice(0, 3).map((campaign) => (
               <CampaignCard campaign={campaign} key={campaign.name} />
@@ -398,7 +528,7 @@ function Dashboard({
         </section>
       </div>
       <section className="section-card">
-        <SectionTitle title="Connected Accounts Summary" action="View Accounts" />
+        <SectionTitle title="Connected Accounts Summary" action="View Accounts" onAction={() => onNavigate("/scheduler/connected-accounts")} />
         <div className="account-grid compact-grid">
           {accounts.slice(0, 5).map((account) => (
             <AccountCard account={account} key={account.name} />
@@ -406,10 +536,10 @@ function Dashboard({
         </div>
       </section>
       <section className="section-card">
-        <SectionTitle title="Top Performing Clips" action="Preview" />
+        <SectionTitle title="Top Performing Clips" action="View All" onAction={() => onNavigate("/analytics/content")} />
         <div className="opportunity-grid">
           {opportunities.slice(0, 2).map((item) => (
-            <VideoOpportunityCard item={item} onClip={onClip} key={item.id} />
+            <VideoOpportunityCard item={item} onClip={onClip} onSave={onSave} key={item.id} />
           ))}
         </div>
       </section>
@@ -419,15 +549,27 @@ function Dashboard({
 
 function AIClipIntelligence({
   activeSub,
+  isScanning,
+  lastScanned,
+  opportunities,
   savedOpportunities,
+  scanSummary,
   onAnalyze,
   onClip,
+  onNavigate,
+  onRunAIScan,
   onSave
 }: {
   activeSub: SubNavItem;
+  isScanning: boolean;
+  lastScanned: string;
+  opportunities: VideoOpportunity[];
   savedOpportunities: VideoOpportunity[];
+  scanSummary: string[];
   onAnalyze: (item: VideoOpportunity) => void;
   onClip: (item: VideoOpportunity) => void;
+  onNavigate: (path: string) => void;
+  onRunAIScan: () => void;
   onSave: (item: VideoOpportunity) => void;
 }) {
   const detailItems = getAIItems(activeSub.key);
@@ -438,18 +580,18 @@ function AIClipIntelligence({
         eyebrow="AI Clip Intelligence"
         title={activeSub.label}
         description="The intelligence hub for trends, niches, competitors, advisor insights, and short-form video opportunity scoring."
-        actions={<button className="primary-button" type="button">AI Scan</button>}
+        actions={<button className="primary-button" type="button" onClick={onRunAIScan}>{isScanning ? "Scanning..." : "AI Scan"}</button>}
       />
-      <SearchPanel title="Search keyword" button="AI Scan" placeholder="Try: AI tools, finance hooks, Islamic productivity..." />
-      <FilterBar filters={["Platform", "YouTube", "TikTok", "Instagram", "Facebook", "Region", "Period", "Niche"]} />
+      <SearchPanel title="Search keyword" button={isScanning ? "Scanning..." : "AI Scan"} placeholder="Try: AI tools, finance hooks, Islamic productivity..." onAction={onRunAIScan} />
+      <FilterBar filters={["Platform", "Niche", "Score", "Period", "Search"]} />
       <StatsGrid />
       <div className="section-grid three">
         <InfoPanel title={activeSub.label} items={detailItems} />
-        <InfoPanel title="Opportunity Score Summary" items={["Viral Score", "Growth Score", "Engagement Score", "Competition Score", "Clipping Score"]} />
+        <InfoPanel title="AI Scan Summary" items={[`Last scanned: ${lastScanned}`, ...scanSummary]} />
         <InfoPanel title="Demo Data Status" items={["Demo Data", "Ready", "Not Connected API", "Saved Opportunities"]} />
       </div>
       <section className="section-card">
-        <SectionTitle title={activeSub.key === "saved-opportunities" ? "Saved Opportunities" : "Top 20 Opportunities"} action="View Saved" />
+        <SectionTitle title={activeSub.key === "saved-opportunities" ? "Saved Opportunities" : "Top 20 Opportunities"} action="View Saved" onAction={() => onNavigate("/ai-clip-intelligence/saved-opportunities")} />
         {tableItems.length === 0 ? (
           <EmptyState title="No saved opportunities yet" description="Click Save on any opportunity to store it here as Demo Data." />
         ) : (
@@ -530,7 +672,7 @@ function CampaignClipper({
         eyebrow="Campaign Clipper"
         title={activeSub.label}
         description="Campaign validation is included as Compliance Center, so every clip can be checked before publishing."
-        actions={<button className="primary-button" type="button">Create Campaign</button>}
+        actions={<button className="primary-button" type="button" onClick={onAddCampaignDraft}>Create Campaign</button>}
       />
       <div className="section-grid five">
         {[
@@ -551,7 +693,17 @@ function CampaignClipper({
   );
 }
 
-function ContentLibrary({ activeSub, contentItems, onScheduleContent }: { activeSub: SubNavItem; contentItems: ContentItem[]; onScheduleContent: (item: ContentItem) => void }) {
+function ContentLibrary({
+  activeSub,
+  contentItems,
+  onArchiveContent,
+  onScheduleContent
+}: {
+  activeSub: SubNavItem;
+  contentItems: ContentItem[];
+  onArchiveContent: (item: ContentItem) => void;
+  onScheduleContent: (item: ContentItem) => void;
+}) {
   return (
     <>
       <PageHeader
@@ -561,7 +713,7 @@ function ContentLibrary({ activeSub, contentItems, onScheduleContent }: { active
         actions={<button className="primary-button" type="button">View All</button>}
       />
       <FilterBar filters={["Keyword", "Category", "Platform", "Status", "Date", "Performance", "Campaign", "Grid/List"]} />
-      <ContentLibraryContent activeSub={activeSub} contentItems={contentItems} onScheduleContent={onScheduleContent} />
+      <ContentLibraryContent activeSub={activeSub} contentItems={contentItems} onArchiveContent={onArchiveContent} onScheduleContent={onScheduleContent} />
     </>
   );
 }
@@ -571,6 +723,8 @@ function Scheduler({
   accounts,
   approvalStatus,
   schedules,
+  onOpenAddAccount,
+  onRefreshAccount,
   onToggleAccount,
   onUpdateApproval
 }: {
@@ -578,6 +732,8 @@ function Scheduler({
   accounts: Account[];
   approvalStatus: "Pending" | "Approved" | "Rejected";
   schedules: ScheduleItem[];
+  onOpenAddAccount: () => void;
+  onRefreshAccount: (account: Account) => void;
   onToggleAccount: (account: Account) => void;
   onUpdateApproval: (status: "Pending" | "Approved" | "Rejected") => void;
 }) {
@@ -587,9 +743,9 @@ function Scheduler({
         eyebrow="Scheduler"
         title={activeSub.label}
         description="Manage connected accounts, queue status, calendar views, auto posting, approvals, and logs."
-        actions={<button className="primary-button" type="button">Add Account</button>}
+        actions={<button className="primary-button" type="button" onClick={onOpenAddAccount}>Add Account</button>}
       />
-      <SchedulerContent activeSub={activeSub} accounts={accounts} approvalStatus={approvalStatus} schedules={schedules} onToggleAccount={onToggleAccount} onUpdateApproval={onUpdateApproval} />
+      <SchedulerContent activeSub={activeSub} accounts={accounts} approvalStatus={approvalStatus} schedules={schedules} onOpenAddAccount={onOpenAddAccount} onRefreshAccount={onRefreshAccount} onToggleAccount={onToggleAccount} onUpdateApproval={onUpdateApproval} />
     </>
   );
 }
@@ -645,7 +801,7 @@ function ActiveSubmenuBar({ items, activePath, onNavigate }: { items: SubNavItem
   );
 }
 
-function SearchPanel({ title, placeholder, button }: { title: string; placeholder: string; button: string }) {
+function SearchPanel({ title, placeholder, button, onAction }: { title: string; placeholder: string; button: string; onAction?: () => void }) {
   return (
     <section className="section-card search-panel">
       <div>
@@ -654,7 +810,7 @@ function SearchPanel({ title, placeholder, button }: { title: string; placeholde
       </div>
       <div className="url-row">
         <input placeholder={placeholder} />
-        <button className="primary-button" type="button">{button}</button>
+        <button className="primary-button" type="button" onClick={onAction}>{button}</button>
       </div>
     </section>
   );
@@ -720,7 +876,17 @@ function ClipStudioContent({
     return (
       <div className="section-grid two">
         <InfoPanel title="Subtitle List Editable" items={["00:00 Strong opening hook", "00:07 Explain key benefit", "00:18 CTA line"]} />
-        <InfoPanel title="Subtitle Controls" items={["Style selector", "Language selector", "Emoji subtitle", "Karaoke subtitle", "Multi language"]} />
+        <section className="section-card">
+          <SectionTitle title="Subtitle Controls" action="Generate Subtitle" />
+          <div className="tag-cloud">
+            {["Style selector", "Language selector", "Emoji subtitle", "Karaoke subtitle", "Multi language"].map((item) => <StatusBadge label={item} tone="cyan" key={item} />)}
+          </div>
+          <div className="row wrap" style={{ marginTop: 14 }}>
+            <button className="secondary-button" type="button">Generate Subtitle</button>
+            <button className="secondary-button" type="button">Translate</button>
+            <button className="ghost-button" type="button">Apply Style</button>
+          </div>
+        </section>
       </div>
     );
   }
@@ -730,7 +896,16 @@ function ClipStudioContent({
       <div className="section-grid three">
         <InfoPanel title="Generated Caption" items={["Stop wasting time editing manually. Let AI find the strongest hook and turn it into short-form clips."]} />
         <InfoPanel title="Hashtags" items={["#aitools", "#shorts", "#creatorworkflow", "#businessgrowth"]} />
-        <InfoPanel title="CTA" items={["Save this workflow", "Try this today", "Follow for more AI systems"]} />
+        <section className="section-card">
+          <SectionTitle title="CTA" action="Generate Caption" />
+          <div className="tag-cloud">
+            {["Save this workflow", "Try this today", "Follow for more AI systems"].map((item) => <StatusBadge label={item} tone="blue" key={item} />)}
+          </div>
+          <div className="row wrap" style={{ marginTop: 14 }}>
+            <button className="primary-button" type="button">Generate Caption</button>
+            <button className="secondary-button" type="button">Copy</button>
+          </div>
+        </section>
       </div>
     );
   }
@@ -820,7 +995,17 @@ function CampaignContent({
   );
 }
 
-function ContentLibraryContent({ activeSub, contentItems, onScheduleContent }: { activeSub: SubNavItem; contentItems: ContentItem[]; onScheduleContent: (item: ContentItem) => void }) {
+function ContentLibraryContent({
+  activeSub,
+  contentItems,
+  onArchiveContent,
+  onScheduleContent
+}: {
+  activeSub: SubNavItem;
+  contentItems: ContentItem[];
+  onArchiveContent: (item: ContentItem) => void;
+  onScheduleContent: (item: ContentItem) => void;
+}) {
   if (activeSub.key === "categories") {
     return <InfoPanel title="Categories" items={categories} />;
   }
@@ -842,8 +1027,8 @@ function ContentLibraryContent({ activeSub, contentItems, onScheduleContent }: {
     <section className="section-card">
       <SectionTitle title={activeSub.key === "archive" ? "Archive" : "All Content"} action="Grid/List Toggle" />
       <div className="content-grid">
-        {contentItems.map((item) => (
-          <ContentCard item={item} onSchedule={onScheduleContent} key={`${item.id}-${item.title}`} />
+        {(activeSub.key === "archive" ? contentItems.filter((item) => item.status === "Archived") : contentItems).map((item) => (
+          <ContentCard item={item} onArchive={onArchiveContent} onSchedule={onScheduleContent} key={`${item.id}-${item.title}`} />
         ))}
       </div>
     </section>
@@ -855,6 +1040,8 @@ function SchedulerContent({
   accounts,
   approvalStatus,
   schedules,
+  onOpenAddAccount,
+  onRefreshAccount,
   onToggleAccount,
   onUpdateApproval
 }: {
@@ -862,16 +1049,18 @@ function SchedulerContent({
   accounts: Account[];
   approvalStatus: "Pending" | "Approved" | "Rejected";
   schedules: ScheduleItem[];
+  onOpenAddAccount: () => void;
+  onRefreshAccount: (account: Account) => void;
   onToggleAccount: (account: Account) => void;
   onUpdateApproval: (status: "Pending" | "Approved" | "Rejected") => void;
 }) {
   if (activeSub.key === "connected-accounts") {
     return (
       <section className="section-card">
-        <SectionTitle title="Connected Accounts" action="Refresh Status" />
+        <SectionTitle title="Connected Accounts" action="Add Account" onAction={onOpenAddAccount} />
         <div className="account-grid">
           {accounts.map((account) => (
-            <AccountCard account={account} onToggle={onToggleAccount} key={account.name} />
+            <AccountCard account={account} onRefresh={onRefreshAccount} onToggle={onToggleAccount} key={account.name} />
           ))}
         </div>
       </section>
@@ -1001,6 +1190,87 @@ function EnvStatusPanel({ title, description, items }: { title: string; descript
   );
 }
 
+function AnalysisModal({ item, onClose }: { item: VideoOpportunity; onClose: () => void }) {
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <div className="modal-card">
+        <SectionTitle title="AI Analysis" action="Close" onAction={onClose} />
+        <StatusBadge label="Demo Data" tone="blue" />
+        <h3>{item.title}</h3>
+        <p>{item.analysis}</p>
+        <div className="tag-cloud">
+          <StatusBadge label={`Viral ${item.viralScore}`} tone="green" />
+          <StatusBadge label={`Clipping ${item.clippingScore}`} tone="blue" />
+          <StatusBadge label={item.niche} tone="cyan" />
+          <StatusBadge label={item.platform} tone="slate" />
+        </div>
+        <button className="primary-button" type="button" onClick={onClose}>Done</button>
+      </div>
+    </div>
+  );
+}
+
+function AddAccountModal({
+  accountHandle,
+  accountName,
+  connectionMode,
+  platform,
+  onCancel,
+  onConnect,
+  onHandleChange,
+  onModeChange,
+  onNameChange,
+  onPlatformChange
+}: {
+  accountHandle: string;
+  accountName: string;
+  connectionMode: "Demo Connect" | "OAuth Placeholder";
+  platform: string;
+  onCancel: () => void;
+  onConnect: () => void;
+  onHandleChange: (value: string) => void;
+  onModeChange: (value: "Demo Connect" | "OAuth Placeholder") => void;
+  onNameChange: (value: string) => void;
+  onPlatformChange: (value: string) => void;
+}) {
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <div className="modal-card">
+        <SectionTitle title="Add Account" action="Cancel" onAction={onCancel} />
+        <div className="modal-form">
+          <label>
+            <span>Platform</span>
+            <select value={platform} onChange={(event) => onPlatformChange(event.target.value)}>
+              {["YouTube", "TikTok", "Instagram", "Facebook", "X", "LinkedIn"].map((item) => (
+                <option value={item} key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Account name</span>
+            <input value={accountName} onChange={(event) => onNameChange(event.target.value)} placeholder="Example: TikTok C" />
+          </label>
+          <label>
+            <span>Username / handle</span>
+            <input value={accountHandle} onChange={(event) => onHandleChange(event.target.value)} placeholder="@fvnclipper" />
+          </label>
+          <label>
+            <span>Connection mode</span>
+            <select value={connectionMode} onChange={(event) => onModeChange(event.target.value as "Demo Connect" | "OAuth Placeholder")}>
+              <option value="Demo Connect">Demo Connect</option>
+              <option value="OAuth Placeholder">OAuth Placeholder</option>
+            </select>
+          </label>
+        </div>
+        <div className="row wrap">
+          <button className="primary-button" type="button" onClick={onConnect}>Connect Account</button>
+          <button className="secondary-button" type="button" onClick={onCancel}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StatsGrid() {
   return (
     <section className="stats-grid">
@@ -1011,11 +1281,11 @@ function StatsGrid() {
   );
 }
 
-function SectionTitle({ title, action }: { title: string; action?: string }) {
+function SectionTitle({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
   return (
     <div className="section-title">
       <h2>{title}</h2>
-      {action && <button className="ghost-button" type="button">{action}</button>}
+      {action && <button className="ghost-button" type="button" onClick={onAction}>{action}</button>}
     </div>
   );
 }

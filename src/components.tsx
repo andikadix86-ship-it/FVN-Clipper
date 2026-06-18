@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Bell,
   CheckCircle2,
@@ -98,7 +99,26 @@ export function AppSidebar({ activePage, activePath, collapsed, mobileOpen, onNa
   );
 }
 
-export function AppHeader({ title, path, onOpenMobile, onAction }: { title: string; path: string; onOpenMobile: () => void; onAction: (label: string) => void }) {
+export function AppHeader({
+  title,
+  path,
+  onOpenMobile,
+  onAction,
+  onCreateSelect
+}: {
+  title: string;
+  path: string;
+  onOpenMobile: () => void;
+  onAction: (label: string) => void;
+  onCreateSelect: (action: "clip" | "campaign" | "schedule" | "account" | "scan") => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const select = (action: "clip" | "campaign" | "schedule" | "account" | "scan") => {
+    setOpen(false);
+    onCreateSelect(action);
+  };
+
   return (
     <header className="app-header">
       <button className="header-menu" type="button" onClick={onOpenMobile} aria-label="Open sidebar">
@@ -109,10 +129,21 @@ export function AppHeader({ title, path, onOpenMobile, onAction }: { title: stri
         <input aria-label="Search" placeholder="Search clips, campaigns, accounts..." />
       </div>
       <div className="header-actions">
-        <button className="primary-button" type="button" onClick={() => onAction("Create New")}>
-          <Plus size={18} />
-          <span>Create New</span>
-        </button>
+        <div className="create-menu">
+          <button className="primary-button" type="button" onClick={() => setOpen((value) => !value)}>
+            <Plus size={16} />
+            <span>Create New</span>
+          </button>
+          {open && (
+            <div className="create-dropdown">
+              <button type="button" onClick={() => select("clip")}>New Clip</button>
+              <button type="button" onClick={() => select("campaign")}>New Campaign</button>
+              <button type="button" onClick={() => select("schedule")}>New Schedule</button>
+              <button type="button" onClick={() => select("account")}>Add Account</button>
+              <button type="button" onClick={() => select("scan")}>AI Scan</button>
+            </div>
+          )}
+        </div>
         <IconButton label="Notifications" onClick={() => onAction("Notifications")}>
           <Bell size={18} />
         </IconButton>
@@ -196,13 +227,14 @@ export function FilterBar({ filters }: { filters: string[] }) {
   );
 }
 
-export function VideoOpportunityCard({ item, onClip }: { item: VideoOpportunity; onClip: (item: VideoOpportunity) => void }) {
+export function VideoOpportunityCard({ item, onClip, onSave }: { item: VideoOpportunity; onClip: (item: VideoOpportunity) => void; onSave?: (item: VideoOpportunity) => void }) {
   return (
     <article className="opportunity-card">
       <div className="thumb">{item.thumbnail}</div>
       <div className="opportunity-body">
         <div className="row between gap">
           <StatusBadge label={item.platform} tone="cyan" />
+          <StatusBadge label="Demo Data" tone="slate" />
           <ScoreBadge score={item.viralScore} label="Viral" />
         </div>
         <h3>{item.title}</h3>
@@ -212,7 +244,7 @@ export function VideoOpportunityCard({ item, onClip }: { item: VideoOpportunity;
           <button className="primary-button compact" type="button" onClick={() => onClip(item)}>
             Clip This Video
           </button>
-          <button className="secondary-button compact" type="button">Save Opportunity</button>
+          <button className="secondary-button compact" type="button" onClick={() => onSave?.(item)}>Save Opportunity</button>
         </div>
       </div>
     </article>
@@ -235,6 +267,7 @@ export function VideoOpportunityTable({
       <table>
         <thead>
           <tr>
+            <th>No</th>
             <th>Video</th>
             <th>Channel</th>
             <th>Platform</th>
@@ -248,12 +281,16 @@ export function VideoOpportunityTable({
           </tr>
         </thead>
         <tbody>
-          {items.map((item) => (
+          {items.map((item, index) => (
             <tr key={item.id}>
+              <td>{index + 1}</td>
               <td>
                 <div className="video-cell">
                   <div className="mini-thumb">{item.thumbnail}</div>
-                  <span>{item.title}</span>
+                  <span>
+                    {item.title}
+                    <StatusBadge label="Demo Data" tone="slate" />
+                  </span>
                 </div>
               </td>
               <td>{item.channel}</td>
@@ -292,6 +329,7 @@ export function CampaignCard({ campaign }: { campaign: Campaign }) {
     <article className="campaign-card">
       <div className="row between gap">
         <StatusBadge label={campaign.status} tone={tone} />
+        <StatusBadge label="Demo Data" tone="slate" />
         <span className="muted">{campaign.platform}</span>
       </div>
       <h3>{campaign.name}</h3>
@@ -304,7 +342,7 @@ export function CampaignCard({ campaign }: { campaign: Campaign }) {
 }
 
 export function ComplianceChecklist() {
-  const rows = [
+  const baseRows = [
     ["Duration valid", "PASS", "green", "15-45 seconds window matched."],
     ["CTA valid", "PASS", "green", "CTA detected near closing frame."],
     ["Hashtag valid", "WARNING", "amber", "One hashtag may be blocked by campaign rules."],
@@ -312,20 +350,26 @@ export function ComplianceChecklist() {
     ["Platform policy valid", "PASS", "green", "No obvious policy issue in demo scan."],
     ["Campaign rule valid", "FAILED", "red", "Required provider phrase is missing."]
   ] as const;
+  const [fixed, setFixed] = useState<string[]>([]);
 
   return (
     <div className="checklist">
-      {rows.map(([label, status, tone, reason]) => (
-        <div className="check-row" key={label}>
-          {status === "FAILED" ? <XCircle size={18} /> : <CheckCircle2 size={18} />}
-          <span>
-            {label}
-            {(status === "WARNING" || status === "FAILED") && <small>{reason}</small>}
-          </span>
-          <StatusBadge label={status} tone={tone} />
-          {(status === "WARNING" || status === "FAILED") && <button className="secondary-button tiny" type="button">Fix</button>}
-        </div>
-      ))}
+      {baseRows.map(([label, status, tone, reason]) => {
+        const isFixed = fixed.includes(label);
+        const currentStatus = isFixed ? "PASS" : status;
+        const currentTone = isFixed ? "green" : tone;
+        return (
+          <div className="check-row" key={label}>
+            {currentStatus === "FAILED" ? <XCircle size={18} /> : <CheckCircle2 size={18} />}
+            <span>
+              {label}
+              {(currentStatus === "WARNING" || currentStatus === "FAILED") && <small>{reason}</small>}
+            </span>
+            <StatusBadge label={currentStatus} tone={currentTone} />
+            {(currentStatus === "WARNING" || currentStatus === "FAILED") && <button className="secondary-button tiny" type="button" onClick={() => setFixed((items) => [...items, label])}>Fix</button>}
+          </div>
+        );
+      })}
       <div className="ai-note">
         <strong>AI suggestion</strong>
         <p>Add one explicit product mention before the CTA and replace a blocked hashtag.</p>
@@ -334,13 +378,14 @@ export function ComplianceChecklist() {
   );
 }
 
-export function ContentCard({ item, onSchedule }: { item: ContentItem; onSchedule?: (item: ContentItem) => void }) {
+export function ContentCard({ item, onArchive, onSchedule }: { item: ContentItem; onArchive?: (item: ContentItem) => void; onSchedule?: (item: ContentItem) => void }) {
   const tone = item.status === "Published" ? "green" : item.status === "Scheduled" ? "blue" : item.status === "Ready" ? "cyan" : item.status === "Archived" ? "slate" : "amber";
   return (
     <article className="content-card">
       <div className="content-preview">{item.category.slice(0, 2).toUpperCase()}</div>
       <div>
         <StatusBadge label={item.status} tone={tone} />
+        <StatusBadge label="Demo Data" tone="slate" />
         <h3>{item.title}</h3>
         <p>{item.category} - {item.platform}</p>
         <p className="muted">{item.campaign}</p>
@@ -349,14 +394,14 @@ export function ContentCard({ item, onSchedule }: { item: ContentItem; onSchedul
           <button className="secondary-button tiny" type="button">Preview</button>
           <button className="secondary-button tiny" type="button" onClick={() => onSchedule?.(item)}>Schedule</button>
           <button className="ghost-button tiny" type="button">Move to Campaign</button>
-          <button className="ghost-button tiny" type="button">Archive</button>
+          <button className="ghost-button tiny" type="button" onClick={() => onArchive?.(item)}>Archive</button>
         </div>
       </div>
     </article>
   );
 }
 
-export function AccountCard({ account, onToggle }: { account: Account; onToggle?: (account: Account) => void }) {
+export function AccountCard({ account, onRefresh, onToggle }: { account: Account; onRefresh?: (account: Account) => void; onToggle?: (account: Account) => void }) {
   const tone = account.status === "Connected" ? "green" : "amber";
   return (
     <article className="account-card">
@@ -366,9 +411,10 @@ export function AccountCard({ account, onToggle }: { account: Account; onToggle?
         <p>{account.platform}</p>
       </div>
       <StatusBadge label={account.status} tone={tone} />
+      <StatusBadge label="Demo Data" tone="slate" />
       <span className="muted">{account.health} - Last sync: {account.lastSync}</span>
       <div className="row">
-        <button className="secondary-button tiny" type="button">Refresh Status</button>
+        <button className="secondary-button tiny" type="button" onClick={() => onRefresh?.(account)}>Refresh Status</button>
         {account.status === "Connected" ? (
           <button className="ghost-button tiny" type="button" onClick={() => onToggle?.(account)}>Disconnect</button>
         ) : (
