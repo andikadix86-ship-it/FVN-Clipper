@@ -16,11 +16,11 @@ import {
   GeneratedClipList,
   PageHeader,
   RightPanel,
+  SocialIcon,
   StatCard,
   StatusBadge,
   ToggleGrid,
   UploadPanel,
-  VideoOpportunityCard,
   VideoOpportunityTable
 } from "./components";
 import {
@@ -309,7 +309,7 @@ export function App() {
         <AppHeader title={activeNav.label} path={activePath} onOpenMobile={() => setMobileOpen(true)} onAction={showToast} onCreateSelect={handleCreateSelect} />
         <main className="content-layout">
           <section className="page-content">
-            <ActiveSubmenuBar items={activeNav.submenu} activePath={activePath} onNavigate={navigate} />
+            {activePage !== "dashboard" && <ActiveSubmenuBar items={activeNav.submenu} activePath={activePath} onNavigate={navigate} />}
             <PageRouter
               activePage={activePage}
               activeSub={activeSub}
@@ -467,12 +467,11 @@ function PageRouter({
       return <Settings activeSub={activeSub} />;
     case "dashboard":
     default:
-      return <Dashboard accounts={accountList} campaigns={campaignList} opportunities={opportunityList} schedules={scheduleList} onAnalyze={onAnalyze} onClip={onClip} onNavigate={onNavigate} onSave={onSaveOpportunity} />;
+      return <Dashboard campaigns={campaignList} opportunities={opportunityList} schedules={scheduleList} onAnalyze={onAnalyze} onClip={onClip} onNavigate={onNavigate} onSave={onSaveOpportunity} />;
   }
 }
 
 function Dashboard({
-  accounts,
   campaigns,
   opportunities,
   schedules,
@@ -481,7 +480,6 @@ function Dashboard({
   onNavigate,
   onSave
 }: {
-  accounts: Account[];
   campaigns: Campaign[];
   opportunities: VideoOpportunity[];
   schedules: ScheduleItem[];
@@ -492,33 +490,22 @@ function Dashboard({
 }) {
   return (
     <>
-      <PageHeader
-        eyebrow="Dashboard - Demo Data"
-        title="Welcome back, Andika"
-        description="A clean command center for finding video opportunities, generating clips, managing campaigns, and publishing to connected accounts."
-        actions={<button className="primary-button" type="button" onClick={() => onNavigate("/clip-studio/source-video")}>Clip This</button>}
-      />
+      <DashboardHero />
       <StatsGrid />
       <div className="section-grid two">
-        <section className="section-card large">
-          <SectionTitle title="Content Performance Chart" action="View All" onAction={() => onNavigate("/analytics/overview")} />
-          <AnalyticsChart />
-        </section>
         <section className="section-card">
-          <SectionTitle title="Recent Activities" action="View All" onAction={() => onNavigate("/analytics/ai-insights")} />
-          <ActivityFeed items={activities} />
+          <SectionTitle title="Top 20 Video Opportunities" action="View All" onAction={() => onNavigate("/ai-clip-intelligence/top-20-opportunities")} />
+          <VideoOpportunityTable items={opportunities.slice(0, 5)} onAnalyze={onAnalyze} onClip={onClip} onSave={onSave} />
         </section>
-      </div>
-      <section className="section-card">
-        <SectionTitle title="Top 20 Video Opportunities" action="View All" onAction={() => onNavigate("/ai-clip-intelligence/top-20-opportunities")} />
-        <VideoOpportunityTable items={opportunities.slice(0, 5)} onAnalyze={onAnalyze} onClip={onClip} onSave={onSave} />
-      </section>
-      <div className="section-grid two">
         <section className="section-card">
           <SectionTitle title="Upcoming Schedule" action="View Calendar" onAction={() => onNavigate("/scheduler/publishing-calendar")} />
-          <CalendarPreview schedules={schedules} />
+          <DashboardSchedule schedules={schedules} />
+          <div className="activity-panel">
+            <SectionTitle title="Recent Activities" action="View All" onAction={() => onNavigate("/analytics/ai-insights")} />
+            <ActivityFeed items={activities} />
+          </div>
         </section>
-        <section className="section-card">
+        <section className="section-card dashboard-wide">
           <SectionTitle title="Campaign Overview" action="View All Campaigns" onAction={() => onNavigate("/campaign-clipper/library")} />
           <div className="campaign-list">
             {campaigns.slice(0, 3).map((campaign) => (
@@ -527,23 +514,90 @@ function Dashboard({
           </div>
         </section>
       </div>
-      <section className="section-card">
-        <SectionTitle title="Connected Accounts Summary" action="View Accounts" onAction={() => onNavigate("/scheduler/connected-accounts")} />
-        <div className="account-grid compact-grid">
-          {accounts.slice(0, 5).map((account) => (
-            <AccountCard account={account} key={account.name} />
-          ))}
-        </div>
-      </section>
+      <div className="section-grid two">
+        <section className="section-card">
+          <SectionTitle title="Publishing Calendar" action="Week" onAction={() => onNavigate("/scheduler/publishing-calendar")} />
+          <CalendarPreview schedules={schedules} />
+        </section>
+        <section className="section-card">
+          <SectionTitle title="Content Performance" action="This Month" onAction={() => onNavigate("/analytics/overview")} />
+          <AnalyticsChart />
+        </section>
+      </div>
       <section className="section-card">
         <SectionTitle title="Top Performing Clips" action="View All" onAction={() => onNavigate("/analytics/content")} />
-        <div className="opportunity-grid">
-          {opportunities.slice(0, 2).map((item) => (
-            <VideoOpportunityCard item={item} onClip={onClip} onSave={onSave} key={item.id} />
+        <div className="top-clip-list">
+          {opportunities.slice(0, 4).map((item, index) => (
+            <TopClipRow item={item} index={index + 1} onClip={onClip} key={item.id} />
           ))}
         </div>
       </section>
     </>
+  );
+}
+
+function DashboardHero() {
+  return (
+    <section className="dashboard-hero">
+      <div>
+        <h1>Welcome back, Andika! <span aria-hidden="true">👋</span></h1>
+        <p>Here's what happening with your content today.</p>
+      </div>
+      <button className="date-button" type="button">
+        Thursday, 18 Jun 2026
+      </button>
+    </section>
+  );
+}
+
+function DashboardSchedule({ schedules }: { schedules: ScheduleItem[] }) {
+  const rows = schedules.slice(0, 4);
+  const fallbackRows: ScheduleItem[] = [
+    { id: "fallback-1", title: "5 Habits That Change Your Life", account: "TikTok A", platform: "TikTok", day: "Thu", time: "09:00", status: "Scheduled" },
+    { id: "fallback-2", title: "Mindset of the Rich", account: "YouTube A", platform: "YouTube", day: "Thu", time: "12:00", status: "Scheduled" },
+    { id: "fallback-3", title: "How AI Will Change Business", account: "Instagram A", platform: "Instagram", day: "Thu", time: "15:00", status: "Scheduled" },
+    { id: "fallback-4", title: "The Power of Consistency", account: "Facebook Page", platform: "Facebook", day: "Thu", time: "18:00", status: "Scheduled" }
+  ];
+
+  return (
+    <div className="dashboard-schedule">
+      {(rows.length ? rows : fallbackRows).map((schedule) => (
+        <div className="schedule-row" key={schedule.id}>
+          <span className="schedule-time">{schedule.time}</span>
+          <SocialIcon platform={schedule.platform} />
+          <span className="schedule-copy">
+            <strong>{schedule.title}</strong>
+            <small>{schedule.account}</small>
+          </span>
+          <span className="schedule-day">Today</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TopClipRow({ item, index, onClip }: { item: VideoOpportunity; index: number; onClip: (item: VideoOpportunity) => void }) {
+  return (
+    <article className="top-clip-row">
+      <span className="top-clip-index">{index}</span>
+      <div className="mini-thumb">{item.thumbnail}</div>
+      <div className="top-clip-copy">
+        <strong>{item.title}</strong>
+        <span>
+          <SocialIcon platform={item.platform} size="small" />
+          {item.platform}
+        </span>
+      </div>
+      <div className="top-clip-metric">
+        <small>Views</small>
+        <strong>{item.views}</strong>
+      </div>
+      <div className="top-clip-metric">
+        <small>Eng.</small>
+        <strong>{item.engagement}</strong>
+      </div>
+      <button className="primary-button compact" type="button" onClick={() => onClip(item)}>Clip</button>
+    </article>
   );
 }
 

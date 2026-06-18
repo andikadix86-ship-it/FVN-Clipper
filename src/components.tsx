@@ -2,19 +2,23 @@ import { useState } from "react";
 import {
   Bell,
   CheckCircle2,
+  CheckSquare2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleHelp,
-  ExternalLink,
+  Eye,
   Filter,
   Menu,
   Moon,
+  MoreVertical,
   Plus,
   Search,
   Sparkles,
   Sun,
+  TrendingUp,
   Upload,
+  Users,
   XCircle
 } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -56,23 +60,54 @@ export function AppSidebar({ activePage, activePath, collapsed, mobileOpen, onNa
       </button>
       <aside className={`sidebar ${collapsed ? "collapsed" : ""} ${mobileOpen ? "mobile-open" : ""}`}>
         <div className="sidebar-brand">
-          <div className="brand-mark">FV</div>
+          <div className="brand-mark" aria-hidden="true">
+            <span />
+            <span />
+          </div>
           {!collapsed && (
             <div>
-              <strong>FVN AI Clipper</strong>
-              <span>Intelligence Platform</span>
+              <strong>FVN</strong>
+              <span>AI CLIPPER</span>
             </div>
           )}
         </div>
 
         <nav className="sidebar-nav" aria-label="Main menu">
-          {navItems.map((item) => {
+          <p className="sidebar-group">AI Workflow</p>
+          {navItems.filter((item) => item.id !== "settings").map((item) => {
             const Icon = item.icon;
             const isActive = activePage === item.id;
             return (
               <div className="nav-block" key={item.id}>
                 <button className={`nav-item ${isActive ? "active" : ""}`} type="button" onClick={() => onNavigate(item.path)}>
-                  <Icon size={18} />
+                  <div className={`nav-icon nav-icon-${item.id}`} aria-hidden="true">
+                    <Icon size={18} />
+                  </div>
+                  {!collapsed && <span>{item.label}</span>}
+                  {!collapsed && isActive && <ChevronDown size={16} />}
+                </button>
+                {!collapsed && isActive && (
+                  <div className="submenu">
+                    {item.submenu.map((sub) => (
+                      <button className={activePath === sub.path ? "active" : ""} type="button" onClick={() => onNavigate(sub.path)} key={sub.path}>
+                        {sub.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          <p className="sidebar-group settings-group">Settings</p>
+          {navItems.filter((item) => item.id === "settings").map((item) => {
+            const Icon = item.icon;
+            const isActive = activePage === item.id;
+            return (
+              <div className="nav-block" key={item.id}>
+                <button className={`nav-item ${isActive ? "active" : ""}`} type="button" onClick={() => onNavigate(item.path)}>
+                  <div className={`nav-icon nav-icon-${item.id}`} aria-hidden="true">
+                    <Icon size={18} />
+                  </div>
                   {!collapsed && <span>{item.label}</span>}
                   {!collapsed && isActive && <ChevronDown size={16} />}
                 </button>
@@ -89,6 +124,15 @@ export function AppSidebar({ activePage, activePath, collapsed, mobileOpen, onNa
             );
           })}
         </nav>
+
+        {!collapsed && (
+          <div className="sidebar-plan">
+            <strong>FVN Pro Plan</strong>
+            <span>Your plan will expire in 23 days</span>
+            <div className="plan-meter"><span /></div>
+            <button className="primary-button compact" type="button">Upgrade Plan</button>
+          </div>
+        )}
 
         <button className="collapse-button" type="button" onClick={onCollapse}>
           {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
@@ -126,7 +170,8 @@ export function AppHeader({
       </button>
       <div className="header-search">
         <Search size={18} />
-        <input aria-label="Search" placeholder="Search clips, campaigns, accounts..." />
+        <input aria-label="Search" placeholder="Search anything..." />
+        <kbd>⌘ K</kbd>
       </div>
       <div className="header-actions">
         <div className="create-menu">
@@ -155,10 +200,10 @@ export function AppHeader({
           <Moon size={16} />
         </IconButton>
         <button className="profile-button" type="button" aria-label="User profile" onClick={() => onAction("User profile")}>
-          <span>FA</span>
+          <span>AP</span>
           <div>
-            <strong>FVN Admin</strong>
-            <small>{path}</small>
+            <strong>Andika Pratama</strong>
+            <small>Creator Plan</small>
           </div>
           <ChevronDown size={16} />
         </button>
@@ -185,13 +230,17 @@ export function PageHeader({ title, eyebrow, description, actions }: { title: st
 }
 
 export function StatCard({ stat }: { stat: Stat }) {
+  const Icon = stat.label === "Published" ? CheckSquare2 : stat.label === "Total Views" ? Eye : stat.label === "Engagement" ? TrendingUp : stat.label === "Connected Accounts" ? Users : ClapperboardIcon;
   return (
     <article className="stat-card">
-      <div className={`stat-dot ${stat.tone}`} />
-      <StatusBadge label="Demo Data" tone="blue" />
-      <span>{stat.label}</span>
-      <strong>{stat.value}</strong>
-      <small>{stat.delta}</small>
+      <div className={`stat-icon ${stat.tone}`}>
+        <Icon size={19} />
+      </div>
+      <div>
+        <span>{stat.label}</span>
+        <strong>{stat.value}</strong>
+        <small>{stat.delta}</small>
+      </div>
     </article>
   );
 }
@@ -233,7 +282,7 @@ export function VideoOpportunityCard({ item, onClip, onSave }: { item: VideoOppo
       <div className="thumb">{item.thumbnail}</div>
       <div className="opportunity-body">
         <div className="row between gap">
-          <StatusBadge label={item.platform} tone="cyan" />
+          <SocialIcon platform={item.platform} />
           <StatusBadge label="Demo Data" tone="slate" />
           <ScoreBadge score={item.viralScore} label="Viral" />
         </div>
@@ -289,12 +338,12 @@ export function VideoOpportunityTable({
                   <div className="mini-thumb">{item.thumbnail}</div>
                   <span>
                     {item.title}
-                    <StatusBadge label="Demo Data" tone="slate" />
+                    <small>{item.channel}</small>
                   </span>
                 </div>
               </td>
               <td>{item.channel}</td>
-              <td>{item.platform}</td>
+              <td><SocialIcon platform={item.platform} /></td>
               <td>{item.views}</td>
               <td>{item.engagement}</td>
               <td>{item.niche}</td>
@@ -328,9 +377,8 @@ export function CampaignCard({ campaign }: { campaign: Campaign }) {
   return (
     <article className="campaign-card">
       <div className="row between gap">
+        <SocialIcon platform={campaign.platform} />
         <StatusBadge label={campaign.status} tone={tone} />
-        <StatusBadge label="Demo Data" tone="slate" />
-        <span className="muted">{campaign.platform}</span>
       </div>
       <h3>{campaign.name}</h3>
       <p>{campaign.start} to {campaign.end}</p>
@@ -382,7 +430,9 @@ export function ContentCard({ item, onArchive, onSchedule }: { item: ContentItem
   const tone = item.status === "Published" ? "green" : item.status === "Scheduled" ? "blue" : item.status === "Ready" ? "cyan" : item.status === "Archived" ? "slate" : "amber";
   return (
     <article className="content-card">
-      <div className="content-preview">{item.category.slice(0, 2).toUpperCase()}</div>
+      <div className="content-preview">
+        <SocialIcon platform={item.platform} />
+      </div>
       <div>
         <StatusBadge label={item.status} tone={tone} />
         <StatusBadge label="Demo Data" tone="slate" />
@@ -405,7 +455,7 @@ export function AccountCard({ account, onRefresh, onToggle }: { account: Account
   const tone = account.status === "Connected" ? "green" : "amber";
   return (
     <article className="account-card">
-      <div className="account-icon">{account.platform.slice(0, 2).toUpperCase()}</div>
+      <SocialIcon platform={account.platform} size="large" />
       <div>
         <h3>{account.name}</h3>
         <p>{account.platform}</p>
@@ -436,6 +486,7 @@ export function CalendarPreview({ schedules = [] }: { schedules?: ScheduleItem[]
           <span>{index + 18}</span>
           {[...slots.slice(0, (index % 3) + 2), ...schedules.filter((schedule) => schedule.day === day).map((schedule) => `${schedule.time} ${schedule.account}`)].map((slot) => (
             <button className="calendar-pill" type="button" key={`${day}-${slot}`}>
+              <SocialIcon platform={slot} size="small" />
               {slot}
             </button>
           ))}
@@ -508,27 +559,61 @@ export function EmptyState({ title, description }: { title: string; description:
 export function RightPanel({ accounts }: { accounts: Account[] }) {
   return (
     <aside className="right-panel">
-      <div className="panel-card gradient-panel">
-        <DemoDataBadge />
-        <h3>{recommendations[0].title}</h3>
-        <p>{recommendations[0].description}</p>
-        <button className="white-button" type="button">{recommendations[0].action}</button>
-      </div>
       <div className="panel-card">
         <div className="row between">
           <h3>Connected Accounts</h3>
-          <ExternalLink size={16} />
+          <button className="ghost-button tiny" type="button">View All</button>
         </div>
         <div className="mini-list">
-          {accounts.slice(0, 5).map((account) => (
-            <div className="mini-list-row" key={account.name}>
-              <span>{account.name}</span>
-              <StatusBadge label={account.status} tone={account.status === "Connected" ? "green" : "amber"} />
+          {accounts.slice(0, 8).map((account) => (
+            <div className="account-list-row" key={account.name}>
+              <SocialIcon platform={account.platform} />
+              <div>
+                <strong>{account.name}</strong>
+                <span>{account.status}</span>
+              </div>
+              <StatusBadge label={account.status === "Connected" ? "✓" : "!"} tone={account.status === "Connected" ? "green" : "amber"} />
+              <MoreVertical size={15} />
             </div>
           ))}
         </div>
       </div>
+      <div className="panel-card recommendation-panel">
+        <div className="row between">
+          <h3>AI Recommendation For You</h3>
+          <button className="ghost-button tiny" type="button">See All</button>
+        </div>
+        {recommendations.map((item, index) => (
+          <div className="recommendation-row" key={item.title}>
+            <span className={`recommendation-icon rec-${index}`}><Sparkles size={18} /></span>
+            <div>
+              <small>{item.status}</small>
+              <strong>{item.title.replace("AI Recommendation For You", "AI Tools")}</strong>
+              <span>{item.description}</span>
+            </div>
+          </div>
+        ))}
+      </div>
     </aside>
+  );
+}
+
+export function SocialIcon({ platform, size = "normal" }: { platform: string; size?: "small" | "normal" | "large" }) {
+  const key = getPlatformKey(platform);
+  const label: Record<string, string> = {
+    youtube: "▶",
+    tiktok: "♪",
+    instagram: "◎",
+    facebook: "f",
+    x: "X",
+    linkedin: "in",
+    default: "AI"
+  };
+
+  return (
+    <span className={`social-icon social-${key} social-${size}`} aria-label={platform} title={platform}>
+      {label[key] ?? label.default}
+    </span>
   );
 }
 
@@ -655,4 +740,19 @@ function Progress({ label, value }: { label: string; value: number }) {
       </div>
     </div>
   );
+}
+
+function getPlatformKey(platform: string) {
+  const lower = platform.toLowerCase();
+  if (lower.includes("youtube")) return "youtube";
+  if (lower.includes("tiktok")) return "tiktok";
+  if (lower.includes("instagram")) return "instagram";
+  if (lower.includes("facebook")) return "facebook";
+  if (lower.includes("linkedin")) return "linkedin";
+  if (lower.includes("x") || lower.includes("twitter")) return "x";
+  return "default";
+}
+
+function ClapperboardIcon({ size = 18 }: { size?: number }) {
+  return <span style={{ fontSize: Math.max(14, size - 1), lineHeight: 1 }}>▣</span>;
 }
