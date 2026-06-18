@@ -18,18 +18,19 @@ import {
 } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { accounts, chartData, navItems } from "./data";
-import type { Account, Activity, Campaign, ContentItem, NavItem, Stat, StatusTone, VideoOpportunity } from "./types";
+import type { Account, Activity, Campaign, ContentItem, Stat, StatusTone, VideoOpportunity } from "./types";
 
 interface SidebarProps {
   activePage: string;
+  activePath: string;
   collapsed: boolean;
   mobileOpen: boolean;
-  onNavigate: (id: NavItem["id"]) => void;
+  onNavigate: (path: string) => void;
   onCollapse: () => void;
   onCloseMobile: () => void;
 }
 
-export function AppSidebar({ activePage, collapsed, mobileOpen, onNavigate, onCollapse, onCloseMobile }: SidebarProps) {
+export function AppSidebar({ activePage, activePath, collapsed, mobileOpen, onNavigate, onCollapse, onCloseMobile }: SidebarProps) {
   return (
     <>
       <button className="mobile-menu" type="button" onClick={onCloseMobile} aria-label="Toggle sidebar">
@@ -52,7 +53,7 @@ export function AppSidebar({ activePage, collapsed, mobileOpen, onNavigate, onCo
             const isActive = activePage === item.id;
             return (
               <div className="nav-block" key={item.id}>
-                <button className={`nav-item ${isActive ? "active" : ""}`} type="button" onClick={() => onNavigate(item.id)}>
+                <button className={`nav-item ${isActive ? "active" : ""}`} type="button" onClick={() => onNavigate(item.path)}>
                   <Icon size={18} />
                   {!collapsed && <span>{item.label}</span>}
                   {!collapsed && isActive && <ChevronDown size={16} />}
@@ -60,9 +61,9 @@ export function AppSidebar({ activePage, collapsed, mobileOpen, onNavigate, onCo
                 {!collapsed && isActive && (
                   <div className="submenu">
                     {item.submenu.map((sub) => (
-                      <a href={`#${item.id}-${slugify(sub)}`} key={sub}>
-                        {sub}
-                      </a>
+                      <button className={activePath === sub.path ? "active" : ""} type="button" onClick={() => onNavigate(sub.path)} key={sub.path}>
+                        {sub.label}
+                      </button>
                     ))}
                   </div>
                 )}
@@ -80,7 +81,7 @@ export function AppSidebar({ activePage, collapsed, mobileOpen, onNavigate, onCo
   );
 }
 
-export function AppHeader({ title, path, onOpenMobile }: { title: string; path: string; onOpenMobile: () => void }) {
+export function AppHeader({ title, path, onOpenMobile, onAction }: { title: string; path: string; onOpenMobile: () => void; onAction: (label: string) => void }) {
   return (
     <header className="app-header">
       <button className="header-menu" type="button" onClick={onOpenMobile} aria-label="Open sidebar">
@@ -91,21 +92,21 @@ export function AppHeader({ title, path, onOpenMobile }: { title: string; path: 
         <input aria-label="Search" placeholder="Search clips, campaigns, accounts..." />
       </div>
       <div className="header-actions">
-        <button className="primary-button" type="button">
+        <button className="primary-button" type="button" onClick={() => onAction("Create New")}>
           <Plus size={18} />
           <span>Create New</span>
         </button>
-        <IconButton label="Notifications">
+        <IconButton label="Notifications" onClick={() => onAction("Notifications")}>
           <Bell size={18} />
         </IconButton>
-        <IconButton label="Help">
+        <IconButton label="Help" onClick={() => onAction("Help")}>
           <CircleHelp size={18} />
         </IconButton>
-        <IconButton label="Theme toggle">
+        <IconButton label="Theme toggle" onClick={() => onAction("Theme toggle")}>
           <Sun size={16} />
           <Moon size={16} />
         </IconButton>
-        <button className="profile-button" type="button" aria-label="User profile">
+        <button className="profile-button" type="button" aria-label="User profile" onClick={() => onAction("User profile")}>
           <span>FA</span>
           <div>
             <strong>FVN Admin</strong>
@@ -139,6 +140,7 @@ export function StatCard({ stat }: { stat: Stat }) {
   return (
     <article className="stat-card">
       <div className={`stat-dot ${stat.tone}`} />
+      <StatusBadge label="Demo Data" tone="blue" />
       <span>{stat.label}</span>
       <strong>{stat.value}</strong>
       <small>{stat.delta}</small>
@@ -208,8 +210,11 @@ export function VideoOpportunityTable({ items, onClip }: { items: VideoOpportuni
           <tr>
             <th>Video</th>
             <th>Channel</th>
+            <th>Platform</th>
             <th>Views</th>
             <th>Engagement</th>
+            <th>Niche</th>
+            <th>Status</th>
             <th>Scores</th>
             <th>AI Analysis</th>
             <th>Action</th>
@@ -225,8 +230,11 @@ export function VideoOpportunityTable({ items, onClip }: { items: VideoOpportuni
                 </div>
               </td>
               <td>{item.channel}</td>
+              <td>{item.platform}</td>
               <td>{item.views}</td>
               <td>{item.engagement}</td>
+              <td>{item.niche}</td>
+              <td><StatusBadge label={item.status} tone={item.status === "Ready" ? "green" : item.status === "Saved" ? "blue" : "slate"} /></td>
               <td>
                 <div className="score-stack">
                   <ScoreBadge score={item.viralScore} label="Viral" />
@@ -235,9 +243,13 @@ export function VideoOpportunityTable({ items, onClip }: { items: VideoOpportuni
               </td>
               <td>{item.analysis}</td>
               <td>
-                <button className="primary-button compact" type="button" onClick={() => onClip(item)}>
-                  Clip This
-                </button>
+                <div className="row wrap">
+                  <button className="primary-button compact" type="button" onClick={() => onClip(item)}>
+                    Clip This
+                  </button>
+                  <button className="secondary-button compact" type="button">Save</button>
+                  <button className="ghost-button compact" type="button">Analyze</button>
+                </div>
               </td>
             </tr>
           ))}
@@ -266,22 +278,25 @@ export function CampaignCard({ campaign }: { campaign: Campaign }) {
 
 export function ComplianceChecklist() {
   const rows = [
-    ["Duration valid", "PASS", "green"],
-    ["CTA valid", "PASS", "green"],
-    ["Hashtag valid", "WARNING", "amber"],
-    ["Product mention valid", "PASS", "green"],
-    ["Platform policy valid", "PASS", "green"],
-    ["Campaign rule valid", "FAILED", "red"]
+    ["Duration valid", "PASS", "green", "15-45 seconds window matched."],
+    ["CTA valid", "PASS", "green", "CTA detected near closing frame."],
+    ["Hashtag valid", "WARNING", "amber", "One hashtag may be blocked by campaign rules."],
+    ["Product mention valid", "PASS", "green", "Product mention found in caption."],
+    ["Platform policy valid", "PASS", "green", "No obvious policy issue in demo scan."],
+    ["Campaign rule valid", "FAILED", "red", "Required provider phrase is missing."]
   ] as const;
 
   return (
     <div className="checklist">
-      {rows.map(([label, status, tone]) => (
+      {rows.map(([label, status, tone, reason]) => (
         <div className="check-row" key={label}>
           {status === "FAILED" ? <XCircle size={18} /> : <CheckCircle2 size={18} />}
-          <span>{label}</span>
+          <span>
+            {label}
+            {(status === "WARNING" || status === "FAILED") && <small>{reason}</small>}
+          </span>
           <StatusBadge label={status} tone={tone} />
-          {status === "FAILED" && <button className="secondary-button tiny" type="button">Fix</button>}
+          {(status === "WARNING" || status === "FAILED") && <button className="secondary-button tiny" type="button">Fix</button>}
         </div>
       ))}
       <div className="ai-note">
@@ -303,13 +318,19 @@ export function ContentCard({ item }: { item: ContentItem }) {
         <p>{item.category} - {item.platform}</p>
         <p className="muted">{item.campaign}</p>
         <strong>{item.metric}</strong>
+        <div className="row wrap content-actions">
+          <button className="secondary-button tiny" type="button">Preview</button>
+          <button className="secondary-button tiny" type="button">Schedule</button>
+          <button className="ghost-button tiny" type="button">Move to Campaign</button>
+          <button className="ghost-button tiny" type="button">Archive</button>
+        </div>
       </div>
     </article>
   );
 }
 
 export function AccountCard({ account }: { account: Account }) {
-  const tone = account.status === "Connected" ? "green" : account.status === "Coming Soon" ? "slate" : "amber";
+  const tone = account.status === "Connected" ? "green" : "amber";
   return (
     <article className="account-card">
       <div className="account-icon">{account.platform.slice(0, 2).toUpperCase()}</div>
@@ -318,10 +339,10 @@ export function AccountCard({ account }: { account: Account }) {
         <p>{account.platform}</p>
       </div>
       <StatusBadge label={account.status} tone={tone} />
-      <span className="muted">{account.health}</span>
+      <span className="muted">{account.health} - Last sync: {account.lastSync}</span>
       <div className="row">
         <button className="secondary-button tiny" type="button">Refresh Status</button>
-        {account.status === "Connected" ? <button className="ghost-button tiny" type="button">Disconnect</button> : <button className="secondary-button tiny" type="button">Add Account</button>}
+        {account.status === "Connected" ? <button className="ghost-button tiny" type="button">Disconnect</button> : <button className="secondary-button tiny" type="button">Connect</button>}
       </div>
     </article>
   );
@@ -472,9 +493,9 @@ export function UploadPanel() {
   );
 }
 
-export function IconButton({ label, children }: { label: string; children: React.ReactNode }) {
+export function IconButton({ label, children, onClick }: { label: string; children: React.ReactNode; onClick?: () => void }) {
   return (
-    <button className="icon-button" type="button" aria-label={label} title={label}>
+    <button className="icon-button" type="button" aria-label={label} title={label} onClick={onClick}>
       {children}
     </button>
   );
@@ -492,8 +513,4 @@ function Progress({ label, value }: { label: string; value: number }) {
       </div>
     </div>
   );
-}
-
-function slugify(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }

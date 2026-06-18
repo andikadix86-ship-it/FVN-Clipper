@@ -12,12 +12,18 @@ export type PageId =
 
 export type StatusTone = "blue" | "cyan" | "green" | "amber" | "red" | "slate";
 
+export interface SubNavItem {
+  key: string;
+  label: string;
+  path: string;
+}
+
 export interface NavItem {
   id: PageId;
   label: string;
   icon: LucideIcon;
   path: string;
-  submenu: string[];
+  submenu: SubNavItem[];
 }
 
 export interface Stat {
@@ -32,6 +38,8 @@ export interface VideoOpportunity {
   title: string;
   channel: string;
   platform: string;
+  niche: string;
+  status: "New" | "Saved" | "Analyzed" | "Ready";
   views: string;
   engagement: string;
   viralScore: number;
@@ -62,8 +70,9 @@ export interface ContentItem {
 export interface Account {
   name: string;
   platform: string;
-  status: "Connected" | "Not Connected" | "Coming Soon";
+  status: "Connected" | "Not Connected";
   health: string;
+  lastSync: string;
 }
 
 export interface Activity {

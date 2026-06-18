@@ -8,7 +8,14 @@ import {
   Megaphone,
   Settings
 } from "lucide-react";
-import type { Account, Activity, Campaign, ContentItem, NavItem, Stat, VideoOpportunity } from "./types";
+import type { Account, Activity, Campaign, ContentItem, NavItem, Stat, SubNavItem, VideoOpportunity } from "./types";
+
+const sub = (base: string, items: Array<[string, string]>): SubNavItem[] =>
+  items.map(([key, label]) => ({
+    key,
+    label,
+    path: key === "overview" && base === "/dashboard" ? base : `${base}/${key}`
+  }));
 
 export const navItems: NavItem[] = [
   {
@@ -16,29 +23,41 @@ export const navItems: NavItem[] = [
     label: "Dashboard",
     icon: LayoutDashboard,
     path: "/dashboard",
-    submenu: ["Overview", "AI Recommendation Today", "Campaign Overview", "Publishing Calendar Preview"]
+    submenu: sub("/dashboard", [
+      ["overview", "Overview"],
+      ["ai-recommendation", "AI Recommendation Today"],
+      ["campaign-overview", "Campaign Overview"],
+      ["publishing-calendar", "Publishing Calendar Preview"]
+    ])
   },
   {
     id: "ai-clip-intelligence",
     label: "AI Clip Intelligence",
     icon: Bot,
     path: "/ai-clip-intelligence",
-    submenu: [
-      "Trend Discovery",
-      "Niche Explorer",
-      "Opportunity Scanner",
-      "Competitor Intelligence",
-      "AI Advisor",
-      "Top 20 Opportunities",
-      "Saved Opportunities"
-    ]
+    submenu: sub("/ai-clip-intelligence", [
+      ["trend-discovery", "Trend Discovery"],
+      ["niche-explorer", "Niche Explorer"],
+      ["opportunity-scanner", "Opportunity Scanner"],
+      ["competitor-intelligence", "Competitor Intelligence"],
+      ["ai-advisor", "AI Advisor"],
+      ["top-20-opportunities", "Top 20 Opportunities"],
+      ["saved-opportunities", "Saved Opportunities"]
+    ])
   },
   {
     id: "clip-studio",
     label: "Clip Studio",
     icon: Clapperboard,
     path: "/clip-studio",
-    submenu: ["Source Video", "AI Clip Generator", "Clip Editor", "Subtitle Studio", "Caption Generator", "Export Center"]
+    submenu: sub("/clip-studio", [
+      ["source-video", "Source Video"],
+      ["ai-clip-generator", "AI Clip Generator"],
+      ["clip-editor", "Clip Editor"],
+      ["subtitle-studio", "Subtitle Studio"],
+      ["caption-generator", "Caption Generator"],
+      ["export-center", "Export Center"]
+    ])
   },
   {
     id: "campaign-clipper",
@@ -46,14 +65,14 @@ export const navItems: NavItem[] = [
     icon: Megaphone,
     path: "/campaign-clipper",
     submenu: [
-      "Campaign Dashboard",
-      "Campaign Library",
-      "Create Campaign",
-      "Campaign Rules",
-      "Campaign Assets",
-      "Compliance Center",
-      "Campaign Performance",
-      "Campaign Archive"
+      { key: "dashboard", label: "Campaign Dashboard", path: "/campaign-clipper/dashboard" },
+      { key: "library", label: "Campaign Library", path: "/campaign-clipper/library" },
+      { key: "create", label: "Create Campaign", path: "/campaign-clipper/create" },
+      { key: "rules", label: "Campaign Rules", path: "/campaign-clipper/rules" },
+      { key: "assets", label: "Campaign Assets", path: "/campaign-clipper/assets" },
+      { key: "compliance", label: "Compliance Center", path: "/campaign-clipper/compliance" },
+      { key: "performance", label: "Campaign Performance", path: "/campaign-clipper/performance" },
+      { key: "archive", label: "Campaign Archive", path: "/campaign-clipper/archive" }
     ]
   },
   {
@@ -61,40 +80,61 @@ export const navItems: NavItem[] = [
     label: "Content Library",
     icon: FolderOpen,
     path: "/content-library",
-    submenu: ["All Content", "Categories", "Collections", "Search Center", "Archive"]
+    submenu: sub("/content-library", [
+      ["all", "All Content"],
+      ["categories", "Categories"],
+      ["collections", "Collections"],
+      ["search", "Search Center"],
+      ["archive", "Archive"]
+    ])
   },
   {
     id: "scheduler",
     label: "Scheduler",
     icon: CalendarClock,
     path: "/scheduler",
-    submenu: ["Connected Accounts", "Content Queue", "Publishing Calendar", "Auto Posting", "Approval Center", "Publishing Logs"]
+    submenu: sub("/scheduler", [
+      ["connected-accounts", "Connected Accounts"],
+      ["content-queue", "Content Queue"],
+      ["publishing-calendar", "Publishing Calendar"],
+      ["auto-posting", "Auto Posting"],
+      ["approval-center", "Approval Center"],
+      ["publishing-logs", "Publishing Logs"]
+    ])
   },
   {
     id: "analytics",
     label: "Analytics",
     icon: BarChart3,
     path: "/analytics",
-    submenu: ["Overview", "Platform Analytics", "Content Analytics", "AI Insights", "Niche Analytics", "Campaign Analytics", "Reports"]
+    submenu: [
+      { key: "overview", label: "Overview", path: "/analytics/overview" },
+      { key: "platform", label: "Platform Analytics", path: "/analytics/platform" },
+      { key: "content", label: "Content Analytics", path: "/analytics/content" },
+      { key: "ai-insights", label: "AI Insights", path: "/analytics/ai-insights" },
+      { key: "niche", label: "Niche Analytics", path: "/analytics/niche" },
+      { key: "campaign", label: "Campaign Analytics", path: "/analytics/campaign" },
+      { key: "reports", label: "Reports", path: "/analytics/reports" }
+    ]
   },
   {
     id: "settings",
     label: "Settings",
     icon: Settings,
     path: "/settings",
-    submenu: [
-      "Profile",
-      "Workspace",
-      "AI Providers",
-      "Social Integrations",
-      "Storage",
-      "Notifications",
-      "Security",
-      "Billing",
-      "API Management",
-      "Backup & Restore",
-      "System Logs"
-    ]
+    submenu: sub("/settings", [
+      ["profile", "Profile"],
+      ["workspace", "Workspace"],
+      ["ai-providers", "AI Providers"],
+      ["social-integrations", "Social Integrations"],
+      ["storage", "Storage"],
+      ["notifications", "Notifications"],
+      ["security", "Security"],
+      ["billing", "Billing"],
+      ["api-management", "API Management"],
+      ["backup-restore", "Backup & Restore"],
+      ["system-logs", "System Logs"]
+    ])
   }
 ];
 
@@ -112,6 +152,8 @@ export const opportunities: VideoOpportunity[] = [
     title: "AI tools for small business growth in 2026",
     channel: "Future Stack Daily",
     platform: "YouTube",
+    niche: "AI & Technology",
+    status: "New",
     views: "1.8M",
     engagement: "9.4%",
     viralScore: 94,
@@ -124,6 +166,8 @@ export const opportunities: VideoOpportunity[] = [
     title: "Morning habits that improve focus and discipline",
     channel: "Momentum Lab",
     platform: "TikTok",
+    niche: "Motivation",
+    status: "Ready",
     views: "842K",
     engagement: "12.1%",
     viralScore: 89,
@@ -136,6 +180,8 @@ export const opportunities: VideoOpportunity[] = [
     title: "Beginner finance mistakes and fast fixes",
     channel: "Pocket CFO",
     platform: "Instagram",
+    niche: "Finance",
+    status: "Saved",
     views: "513K",
     engagement: "8.9%",
     viralScore: 86,
@@ -148,6 +194,8 @@ export const opportunities: VideoOpportunity[] = [
     title: "Islamic productivity lessons for creators",
     channel: "Barakah Studio",
     platform: "Facebook",
+    niche: "Islamic",
+    status: "Analyzed",
     views: "389K",
     engagement: "10.8%",
     viralScore: 82,
@@ -174,14 +222,14 @@ export const contentItems: ContentItem[] = [
 ];
 
 export const accounts: Account[] = [
-  { name: "TikTok A", platform: "TikTok", status: "Connected", health: "Ready" },
-  { name: "TikTok B", platform: "TikTok", status: "Connected", health: "Token healthy" },
-  { name: "YouTube A", platform: "YouTube", status: "Connected", health: "Ready" },
-  { name: "YouTube B", platform: "YouTube", status: "Connected", health: "Refresh due" },
-  { name: "Instagram A", platform: "Instagram", status: "Connected", health: "Ready" },
-  { name: "Facebook Page", platform: "Facebook", status: "Not Connected", health: "OAuth required" },
-  { name: "LinkedIn Brand", platform: "LinkedIn", status: "Coming Soon", health: "Coming Soon" },
-  { name: "X Growth", platform: "X", status: "Coming Soon", health: "Coming Soon" }
+  { name: "TikTok A", platform: "TikTok", status: "Connected", health: "Ready", lastSync: "12 minutes ago" },
+  { name: "TikTok B", platform: "TikTok", status: "Connected", health: "Token healthy", lastSync: "29 minutes ago" },
+  { name: "YouTube A", platform: "YouTube", status: "Connected", health: "Ready", lastSync: "1 hour ago" },
+  { name: "YouTube B", platform: "YouTube", status: "Connected", health: "Refresh due", lastSync: "Yesterday" },
+  { name: "Instagram A", platform: "Instagram", status: "Connected", health: "Ready", lastSync: "18 minutes ago" },
+  { name: "Facebook Page", platform: "Facebook", status: "Not Connected", health: "OAuth required", lastSync: "Never" },
+  { name: "LinkedIn Brand", platform: "LinkedIn", status: "Not Connected", health: "API not connected", lastSync: "Never" },
+  { name: "X Growth", platform: "X", status: "Not Connected", health: "API not connected", lastSync: "Never" }
 ];
 
 export const activities: Activity[] = [

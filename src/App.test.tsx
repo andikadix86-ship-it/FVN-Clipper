@@ -9,6 +9,6 @@ describe("FVN AI Clipper app", () => {
     expect(screen.getByRole("button", { name: /Dashboard/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /AI Clip Intelligence/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Campaign Clipper/i })).toBeInTheDocument();
-    expect(screen.getByText(/Welcome back to FVN AI Clipper/i)).toBeInTheDocument();
+    expect(screen.getByText(/Welcome back, Andika/i)).toBeInTheDocument();
   });
 });
