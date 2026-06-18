@@ -36,7 +36,9 @@ import {
   opportunities,
   stats
 } from "./data/ai-clipper-demo";
+import { aiProviderEnvStatus, environmentStatus, featureFlagEnvStatus, socialIntegrationEnvStatus } from "./env";
 import type { Account, Campaign, ContentItem, GeneratedClip, PageId, ScheduleItem, SubNavItem, VideoOpportunity } from "./types";
+import type { EnvStatusItem } from "./env";
 
 const SELECTED_SOURCE_KEY = "fvn-selected-source";
 const SAVED_OPPORTUNITIES_KEY = "fvn-saved-opportunities";
@@ -934,11 +936,26 @@ function AnalyticsContent({ activeSub, contentCount, scheduleCount }: { activeSu
 }
 
 function SettingsContent({ activeSub }: { activeSub: SubNavItem }) {
+  if (activeSub.key === "ai-providers") {
+    return <EnvStatusPanel title="AI Providers" description="Secret keys stay server-side. The UI reads public feature flags and shows safe provider status." items={aiProviderEnvStatus} />;
+  }
+
+  if (activeSub.key === "social-integrations") {
+    return <EnvStatusPanel title="Social Integrations" description="OAuth secrets are not exposed to the frontend. Demo mode and real API flags drive these statuses." items={socialIntegrationEnvStatus} />;
+  }
+
+  if (activeSub.key === "api-management") {
+    return (
+      <div className="section-grid two">
+        <EnvStatusPanel title="Feature Flags" description="Public environment flags for demo data, real API mode, and auto-posting." items={featureFlagEnvStatus} />
+        <InfoPanel title="API Management" items={["API keys", "Webhook", "External integrations", `App: ${environmentStatus.appName}`, `URL: ${environmentStatus.appUrl}`]} />
+      </div>
+    );
+  }
+
   const map: Record<string, string[]> = {
     profile: ["Name", "Email", "Avatar", "Plan"],
     workspace: ["Workspace name", "Logo", "Brand color", "Timezone"],
-    "ai-providers": ["Gemini - Not Connected", "OpenAI - Not Connected", "Claude - Not Connected", "Custom Provider - Not Connected"],
-    "social-integrations": ["YouTube OAuth - Not Connected", "TikTok OAuth - Not Connected", "Meta OAuth - Not Connected", "Telegram Bot - Not Connected"],
     storage: ["Usage cards", "Media storage", "Archive storage"],
     notifications: ["Email", "Telegram", "Browser notification"],
     security: ["Password", "2FA", "Devices", "Sessions"],
@@ -956,6 +973,31 @@ function SettingsContent({ activeSub }: { activeSub: SubNavItem }) {
         <FormGrid items={(map[activeSub.key] ?? map.profile).slice(0, 6)} />
       </section>
     </div>
+  );
+}
+
+function EnvStatusPanel({ title, description, items }: { title: string; description: string; items: EnvStatusItem[] }) {
+  return (
+    <section className="section-card">
+      <SectionTitle title={title} action="Open ENV_SETUP" />
+      <p className="muted env-description">{description}</p>
+      <div className="env-status-grid">
+        {items.map((item) => (
+          <article className="env-status-card" key={item.name}>
+            <div className="row between gap">
+              <strong>{item.name}</strong>
+              <StatusBadge label={item.status} tone={item.tone} />
+            </div>
+            <p>{item.note}</p>
+            <div className="tag-cloud">
+              {item.required.map((key) => (
+                <StatusBadge label={key} tone="slate" key={key} />
+              ))}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 

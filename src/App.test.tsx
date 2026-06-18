@@ -78,4 +78,24 @@ describe("FVN AI Clipper app", () => {
     expect(screen.getAllByText("Instagram A").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Not Connected").length).toBeGreaterThan(0);
   });
+
+  it("shows safe environment status in Settings integrations", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "AI Providers" })[0]);
+    expect(window.location.pathname).toBe("/settings/ai-providers");
+    expect(screen.getByText("Gemini")).toBeInTheDocument();
+    expect(screen.getAllByText("Demo Mode").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Social Integrations" })[0]);
+    expect(window.location.pathname).toBe("/settings/social-integrations");
+    expect(screen.getByText("YouTube OAuth")).toBeInTheDocument();
+    expect(screen.getByText("TikTok OAuth")).toBeInTheDocument();
+    expect(screen.getAllByText("Demo Mode").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "API Management" })[0]);
+    expect(screen.getByText("Feature Flags")).toBeInTheDocument();
+    expect(screen.getAllByText("Not Connected").length).toBeGreaterThan(0);
+  });
 });
