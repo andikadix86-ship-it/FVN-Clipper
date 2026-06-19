@@ -43,41 +43,41 @@ async function routeRequest(request: IncomingMessage, response: ServerResponse) 
   }
 
   if (method === "GET" && pathname === "/api/dashboard/overview") {
-    sendJson(response, { success: true, data: await getDashboardOverview() });
+    sendData(response, await getDashboardOverview());
     return;
   }
 
   if (method === "GET" && pathname === "/api/dashboard/recommendations") {
-    sendJson(response, { success: true, data: await getDashboardRecommendations() });
+    sendData(response, await getDashboardRecommendations());
     return;
   }
 
   if (method === "GET" && pathname === "/api/dashboard/campaigns") {
-    sendJson(response, { success: true, data: await getDashboardCampaigns() });
+    sendData(response, await getDashboardCampaigns());
     return;
   }
 
   if (method === "GET" && pathname === "/api/dashboard/publishing-calendar") {
-    sendJson(response, {
-      success: true,
-      data: await getPublishingCalendar({
+    sendData(
+      response,
+      await getPublishingCalendar({
         platform: requestUrl.searchParams.get("platform"),
         status: requestUrl.searchParams.get("status"),
         date: requestUrl.searchParams.get("date")
       })
-    });
+    );
     return;
   }
 
   if (method === "GET" && pathname === "/api/ai-clip-intelligence/categories") {
-    sendJson(response, { success: true, data: await getCategories() });
+    sendData(response, await getCategories());
     return;
   }
 
   if (method === "GET" && pathname === "/api/ai-clip-intelligence/opportunities") {
-    sendJson(response, {
-      success: true,
-      data: await getOpportunities({
+    sendData(
+      response,
+      await getOpportunities({
         keyword: requestUrl.searchParams.get("keyword"),
         category: requestUrl.searchParams.get("category"),
         platform: requestUrl.searchParams.get("platform"),
@@ -89,7 +89,7 @@ async function routeRequest(request: IncomingMessage, response: ServerResponse) 
         limit: requestUrl.searchParams.get("limit"),
         sort: requestUrl.searchParams.get("sort")
       })
-    });
+    );
     return;
   }
 
@@ -103,18 +103,18 @@ async function routeRequest(request: IncomingMessage, response: ServerResponse) 
       return;
     }
 
-    sendJson(response, { success: true, data });
+    sendData(response, data, "message" in data && typeof data.message === "string" ? data.message : undefined);
     return;
   }
 
   if (method === "GET" && pathname === "/api/ai-clip-intelligence/competitors") {
-    sendJson(response, {
-      success: true,
-      data: await getCompetitors({
+    sendData(
+      response,
+      await getCompetitors({
         platform: requestUrl.searchParams.get("platform"),
         niche: requestUrl.searchParams.get("niche")
       })
-    });
+    );
     return;
   }
 
@@ -129,6 +129,37 @@ function sendJson(response: ServerResponse, body: unknown, status = 200) {
     "content-type": "application/json; charset=utf-8"
   });
   response.end(JSON.stringify(body));
+}
+
+function sendData(response: ServerResponse, data: unknown, message?: string) {
+  const body: Record<string, unknown> = {
+    success: true,
+    data
+  };
+
+  if (isDemoData(data)) {
+    body.mode = "DEMO";
+    body.sourceType = "DEMO";
+  }
+
+  if (message) {
+    body.message = message;
+  }
+
+  sendJson(response, body);
+}
+
+function isDemoData(data: unknown): boolean {
+  if (Array.isArray(data)) {
+    return data.some((item) => isDemoData(item));
+  }
+
+  if (data && typeof data === "object") {
+    const record = data as Record<string, unknown>;
+    return record.sourceType === "DEMO" || record.mode === "DEMO";
+  }
+
+  return false;
 }
 
 function sendError(response: ServerResponse, error: unknown) {

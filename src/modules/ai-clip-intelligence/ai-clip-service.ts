@@ -1,5 +1,6 @@
 import { ContentStatus, PerformanceLevel, Platform, Prisma } from "@prisma/client";
-import { prisma } from "../db/prisma";
+import { getDemoCategories, getDemoCompetitors, getDemoOpportunities, setDemoOpportunitySaved } from "../demo/demo-data";
+import { isDatabaseConfigured, prisma } from "../db/prisma";
 
 export interface OpportunityFilters {
   keyword?: string | null;
@@ -20,6 +21,10 @@ export interface CompetitorFilters {
 }
 
 export function getCategories() {
+  if (!isDatabaseConfigured()) {
+    return getDemoCategories();
+  }
+
   return prisma.category.findMany({
     where: { isActive: true },
     orderBy: { name: "asc" }
@@ -27,6 +32,10 @@ export function getCategories() {
 }
 
 export function getCompetitors(filters: CompetitorFilters = {}) {
+  if (!isDatabaseConfigured()) {
+    return getDemoCompetitors(filters);
+  }
+
   const where: Prisma.CompetitorProfileWhereInput = {};
   const platform = parseEnumValue(filters.platform, Platform);
 
@@ -45,6 +54,10 @@ export function getCompetitors(filters: CompetitorFilters = {}) {
 }
 
 export function getOpportunities(filters: OpportunityFilters = {}) {
+  if (!isDatabaseConfigured()) {
+    return getDemoOpportunities(filters);
+  }
+
   const where: Prisma.AiClipOpportunityWhereInput = {};
   const keyword = filters.keyword?.trim();
   const platform = parseEnumValue(filters.platform, Platform);
@@ -111,6 +124,10 @@ export function getOpportunities(filters: OpportunityFilters = {}) {
 }
 
 export async function setOpportunitySaved(id: string, saved?: boolean) {
+  if (!isDatabaseConfigured()) {
+    return setDemoOpportunitySaved(id, saved);
+  }
+
   const current = await prisma.aiClipOpportunity.findUnique({
     where: { id },
     select: { isSaved: true }

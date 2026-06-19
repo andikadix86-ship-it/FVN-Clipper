@@ -543,11 +543,17 @@ function Dashboard({
   const campaignState = useApiResource<ApiCampaign[]>("/api/dashboard/campaigns", activeSub.key === "overview" || activeSub.key === "campaign-overview");
   const calendarState = useApiResource<ApiPublishingSchedule[]>("/api/dashboard/publishing-calendar", activeSub.key === "overview" || activeSub.key === "publishing-calendar-preview");
   const topOpportunityState = useApiResource<ApiOpportunity[]>(buildOpportunityUrl({ limit: 20, sort: "opportunityScore_desc" }), activeSub.key === "overview");
+  const isDashboardDemoMode =
+    isDemoModeData(overview.data) ||
+    isDemoModeData(recommendationState.data) ||
+    isDemoModeData(campaignState.data) ||
+    isDemoModeData(calendarState.data) ||
+    isDemoModeData(topOpportunityState.data);
 
   if (activeSub.key === "ai-recommendation-today") {
     return (
       <>
-        <DashboardHero />
+        <DashboardHero demoMode={isDashboardDemoMode} />
         <ApiStateView state={recommendationState} emptyTitle="No recommendations yet" emptyDescription="Database returned no AI Recommendation Today records.">
           {(items) => (
             <section className="section-card">
@@ -565,7 +571,7 @@ function Dashboard({
 
     return (
       <>
-        <DashboardHero />
+        <DashboardHero demoMode={isDashboardDemoMode} />
         <ApiStateView state={campaignState} emptyTitle="No campaigns found" emptyDescription="Database returned no campaign records.">
           {() => (
             <section className="section-card">
@@ -587,7 +593,7 @@ function Dashboard({
 
     return (
       <>
-        <DashboardHero />
+        <DashboardHero demoMode={isDashboardDemoMode} />
         <ApiStateView state={calendarState} emptyTitle="No publishing schedules found" emptyDescription="Database returned no calendar records.">
           {() => (
             <>
@@ -608,7 +614,7 @@ function Dashboard({
 
   return (
     <>
-      <DashboardHero />
+      <DashboardHero demoMode={isDashboardDemoMode} />
       <ApiStateViewObject state={overview} emptyTitle="No dashboard overview data" emptyDescription="Database returned no overview metrics.">
         {(data) => (
           <DashboardOverviewLayout
@@ -625,11 +631,14 @@ function Dashboard({
   );
 }
 
-function DashboardHero() {
+function DashboardHero({ demoMode = false }: { demoMode?: boolean }) {
   return (
     <section className="dashboard-hero">
       <div>
-        <h1>Dashboard Overview</h1>
+        <div className="dashboard-title-row">
+          <h1>Dashboard Overview</h1>
+          {demoMode && <StatusBadge label="DEMO MODE - Database belum terhubung" tone="blue" />}
+        </div>
         <p>Welcome back. Here's what's happening with your content empire today.</p>
       </div>
       <button className="date-button" type="button">
@@ -637,6 +646,19 @@ function DashboardHero() {
       </button>
     </section>
   );
+}
+
+function isDemoModeData(data: unknown): boolean {
+  if (Array.isArray(data)) {
+    return data.some((item) => isDemoModeData(item));
+  }
+
+  if (data && typeof data === "object") {
+    const record = data as { mode?: string; sourceType?: string };
+    return record.mode === "DEMO" || record.sourceType === "DEMO";
+  }
+
+  return false;
 }
 
 function DashboardSchedule({ schedules }: { schedules: ScheduleItem[] }) {

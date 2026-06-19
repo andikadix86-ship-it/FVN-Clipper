@@ -1,5 +1,6 @@
 import { ContentStatus, Platform, Prisma } from "@prisma/client";
-import { prisma } from "../db/prisma";
+import { getDemoCampaigns, getDemoDashboardOverview, getDemoPublishingCalendar, getDemoRecommendations } from "../demo/demo-data";
+import { isDatabaseConfigured, prisma } from "../db/prisma";
 
 export interface PublishingCalendarFilters {
   platform?: string | null;
@@ -8,6 +9,10 @@ export interface PublishingCalendarFilters {
 }
 
 export async function getDashboardOverview() {
+  if (!isDatabaseConfigured()) {
+    return getDemoDashboardOverview();
+  }
+
   const [totalCampaigns, totalOpportunities, savedOpportunities, scheduledPosts, publishedPosts, failedPosts, topCategories, latestRecommendations] = await Promise.all([
     prisma.campaign.count(),
     prisma.aiClipOpportunity.count(),
@@ -36,6 +41,7 @@ export async function getDashboardOverview() {
   ]);
 
   return {
+    sourceType: "REAL_API" as const,
     totals: {
       campaigns: totalCampaigns,
       opportunities: totalOpportunities,
@@ -56,12 +62,20 @@ export async function getDashboardOverview() {
 }
 
 export function getDashboardRecommendations() {
+  if (!isDatabaseConfigured()) {
+    return getDemoRecommendations();
+  }
+
   return prisma.dashboardRecommendation.findMany({
     orderBy: [{ isRead: "asc" }, { priority: "asc" }, { createdAt: "desc" }]
   });
 }
 
 export function getDashboardCampaigns() {
+  if (!isDatabaseConfigured()) {
+    return getDemoCampaigns();
+  }
+
   return prisma.campaign.findMany({
     include: {
       category: true,
@@ -77,6 +91,10 @@ export function getDashboardCampaigns() {
 }
 
 export function getPublishingCalendar(filters: PublishingCalendarFilters) {
+  if (!isDatabaseConfigured()) {
+    return getDemoPublishingCalendar(filters);
+  }
+
   const where: Prisma.PublishingScheduleWhereInput = {};
   const platform = parseEnumValue(filters.platform, Platform);
   const status = parseEnumValue(filters.status, ContentStatus);

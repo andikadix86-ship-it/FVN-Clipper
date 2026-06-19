@@ -1740,6 +1740,13 @@ td {
   line-height: 1.05;
 }
 
+.dashboard-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
 .dashboard-overview-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr) minmax(420px, 1.35fr);

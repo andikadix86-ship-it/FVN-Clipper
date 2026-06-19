@@ -25,6 +25,10 @@ function getServerEnv(key: string) {
   return processEnv?.[key];
 }
 
+export function isDatabaseConfigured() {
+  return Boolean(getServerEnv("DATABASE_URL"));
+}
+
 function createMissingDatabaseClient() {
   return new Proxy(
     {},

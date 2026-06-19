@@ -104,6 +104,13 @@ export interface ApiCompetitor {
 }
 
 export interface DashboardOverviewData {
+  mode?: "DEMO";
+  sourceType?: SourceType;
+  insights?: {
+    engagementRate: string;
+    views: string;
+    avgWatchTime: string;
+  };
   totals: {
     campaigns: number;
     opportunities: number;
@@ -138,10 +145,14 @@ export async function fetchApiData<T>(path: string, init: RequestInit = {}): Pro
     throw new Error(`API returned non-JSON response for ${path}. Check Vite proxy or backend server. Preview: ${text.slice(0, 120)}`);
   }
 
-  const payload = (await response.json()) as { data: T; error?: string | null; success?: boolean };
+  const payload = (await response.json()) as { data: T; error?: string | null; success?: boolean; mode?: "DEMO"; sourceType?: SourceType };
 
   if (!response.ok || payload.success === false || payload.error) {
     throw new Error(payload.error || `Request failed: ${response.status}`);
+  }
+
+  if (payload.mode === "DEMO" && payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) {
+    return { ...payload.data, mode: payload.mode, sourceType: payload.sourceType ?? "DEMO" } as T;
   }
 
   return payload.data;
