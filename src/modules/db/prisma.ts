@@ -9,7 +9,7 @@ function createPrismaClient() {
   const connectionString = getServerEnv("DATABASE_URL");
 
   if (!connectionString) {
-    throw new Error("DATABASE_URL is required before using Prisma-backed API routes.");
+    return createMissingDatabaseClient();
   }
 
   const adapter = new PrismaPg(connectionString);
@@ -23,4 +23,15 @@ globalForPrisma.prisma = prisma;
 function getServerEnv(key: string) {
   const processEnv = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env;
   return processEnv?.[key];
+}
+
+function createMissingDatabaseClient() {
+  return new Proxy(
+    {},
+    {
+      get() {
+        throw new Error("Database belum dikonfigurasi. Isi DATABASE_URL dan DIRECT_URL lalu jalankan migration/seed.");
+      }
+    }
+  ) as PrismaClient;
 }

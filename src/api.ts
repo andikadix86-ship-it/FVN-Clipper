@@ -131,9 +131,16 @@ export interface OpportunityQuery {
 
 export async function fetchApiData<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(path, init);
-  const payload = (await response.json()) as { data: T; error?: string | null };
+  const contentType = response.headers.get("content-type") || "";
 
-  if (!response.ok || payload.error) {
+  if (!contentType.includes("application/json")) {
+    const text = await response.text();
+    throw new Error(`API returned non-JSON response for ${path}. Check Vite proxy or backend server. Preview: ${text.slice(0, 120)}`);
+  }
+
+  const payload = (await response.json()) as { data: T; error?: string | null; success?: boolean };
+
+  if (!response.ok || payload.success === false || payload.error) {
     throw new Error(payload.error || `Request failed: ${response.status}`);
   }
 
