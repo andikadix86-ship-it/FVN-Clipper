@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { Sparkles } from "lucide-react";
 import {
   AccountCard,
   AnalyticsChart,
@@ -360,9 +361,9 @@ export function App() {
       />
       <div className={`app-main ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
         <AppHeader title={activeNav.label} path={activePath} onOpenMobile={() => setMobileOpen(true)} onAction={showToast} onCreateSelect={handleCreateSelect} />
-        <main className="content-layout">
+        <main className={`content-layout ${activePage === "dashboard" ? "dashboard-layout" : ""}`}>
           <section className="page-content">
-            <ActiveSubmenuBar items={activeNav.submenu} activePath={activePath} onNavigate={navigate} />
+            {activePage !== "dashboard" && <ActiveSubmenuBar items={activeNav.submenu} activePath={activePath} onNavigate={navigate} />}
             <PageRouter
               activePage={activePage}
               activeSub={activeSub}
@@ -395,7 +396,7 @@ export function App() {
               scanSummary={scanSummary}
             />
           </section>
-          <RightPanel accounts={accountList} />
+          {activePage !== "dashboard" && <RightPanel accounts={accountList} />}
         </main>
       </div>
       {analysisTarget && <AnalysisModal item={analysisTarget} onClose={() => setAnalysisTarget(null)} />}
@@ -538,9 +539,10 @@ function Dashboard({
   onSave: (item: VideoOpportunity) => void;
 }) {
   const overview = useApiResource<DashboardOverviewData>("/api/dashboard/overview", activeSub.key === "overview");
-  const recommendationState = useApiResource<ApiRecommendation[]>("/api/dashboard/recommendations", activeSub.key === "ai-recommendation-today");
-  const campaignState = useApiResource<ApiCampaign[]>("/api/dashboard/campaigns", activeSub.key === "campaign-overview");
-  const calendarState = useApiResource<ApiPublishingSchedule[]>("/api/dashboard/publishing-calendar", activeSub.key === "publishing-calendar-preview");
+  const recommendationState = useApiResource<ApiRecommendation[]>("/api/dashboard/recommendations", activeSub.key === "overview" || activeSub.key === "ai-recommendation-today");
+  const campaignState = useApiResource<ApiCampaign[]>("/api/dashboard/campaigns", activeSub.key === "overview" || activeSub.key === "campaign-overview");
+  const calendarState = useApiResource<ApiPublishingSchedule[]>("/api/dashboard/publishing-calendar", activeSub.key === "overview" || activeSub.key === "publishing-calendar-preview");
+  const topOpportunityState = useApiResource<ApiOpportunity[]>(buildOpportunityUrl({ limit: 20, sort: "opportunityScore_desc" }), activeSub.key === "overview");
 
   if (activeSub.key === "ai-recommendation-today") {
     return (
@@ -609,23 +611,14 @@ function Dashboard({
       <DashboardHero />
       <ApiStateViewObject state={overview} emptyTitle="No dashboard overview data" emptyDescription="Database returned no overview metrics.">
         {(data) => (
-          <>
-            <DashboardMetricGrid data={data} />
-            <div className="section-grid two">
-              <section className="section-card">
-                <SectionTitle title="Top Categories" action="Open Categories" onAction={() => onNavigate("/ai-clip-intelligence/niche-explorer")} />
-                <div className="tag-cloud">
-                  {data.topCategories.map((category) => (
-                    <StatusBadge label={`${category.name}: ${category.opportunities}`} tone={category.sourceType === "DEMO" ? "blue" : "slate"} key={category.id} />
-                  ))}
-                </div>
-              </section>
-              <section className="section-card">
-                <SectionTitle title="Latest Recommendations" action="View All" onAction={() => onNavigate("/dashboard/ai-recommendation-today")} />
-                <RecommendationList items={data.latestRecommendations} />
-              </section>
-            </div>
-          </>
+          <DashboardOverviewLayout
+            calendarState={calendarState}
+            campaignState={campaignState}
+            data={data}
+            onNavigate={onNavigate}
+            recommendationState={recommendationState}
+            topOpportunityState={topOpportunityState}
+          />
         )}
       </ApiStateViewObject>
     </>
@@ -636,11 +629,11 @@ function DashboardHero() {
   return (
     <section className="dashboard-hero">
       <div>
-        <h1>Welcome back, Andika! <span aria-hidden="true">👋</span></h1>
-        <p>Here's what happening with your content today.</p>
+        <h1>Dashboard Overview</h1>
+        <p>Welcome back. Here's what's happening with your content empire today.</p>
       </div>
       <button className="date-button" type="button">
-        Thursday, 18 Jun 2026
+        Friday, 19 Jun 2026
       </button>
     </section>
   );
@@ -1199,21 +1192,186 @@ function ApiStateViewObject<T>({
   return <>{children(state.data)}</>;
 }
 
-function DashboardMetricGrid({ data }: { data: DashboardOverviewData }) {
+function DashboardMetricGrid({ data, recommendationCount }: { data: DashboardOverviewData; recommendationCount?: number }) {
   const dashboardStats = [
-    { label: "Campaigns", value: String(data.totals.campaigns), delta: "Database campaigns", tone: "blue" as const },
-    { label: "Opportunities", value: String(data.totals.opportunities), delta: "AI Clip Intelligence", tone: "cyan" as const },
-    { label: "Saved", value: String(data.totals.savedOpportunities), delta: "Saved opportunities", tone: "green" as const },
-    { label: "Scheduled", value: String(data.totals.scheduledPosts), delta: "Publishing calendar", tone: "amber" as const },
-    { label: "Failed", value: String(data.totals.failedPosts), delta: "Needs attention", tone: "red" as const }
+    { label: "Total Projects", value: String(data.totals.campaigns + data.totals.opportunities), delta: "Database records", tone: "blue" as const },
+    { label: "AI Recommendations Today", value: String(recommendationCount ?? data.latestRecommendations.length), delta: "Latest database advice", tone: "cyan" as const },
+    { label: "Active Campaigns", value: String(data.totals.campaigns), delta: "Campaign overview", tone: "slate" as const },
+    { label: "Scheduled Posts", value: String(data.totals.scheduledPosts), delta: "Publishing calendar", tone: "amber" as const },
+    { label: "Saved Opportunities", value: String(data.totals.savedOpportunities), delta: "Saved opportunities", tone: "green" as const }
   ];
 
   return (
-    <section className="stats-grid">
+    <section className="stats-grid dashboard-kpis">
       {dashboardStats.map((stat) => (
         <StatCard stat={stat} key={stat.label} />
       ))}
     </section>
+  );
+}
+
+function DashboardOverviewLayout({
+  calendarState,
+  campaignState,
+  data,
+  onNavigate,
+  recommendationState,
+  topOpportunityState
+}: {
+  calendarState: ApiResourceState<ApiPublishingSchedule[]>;
+  campaignState: ApiResourceState<ApiCampaign[]>;
+  data: DashboardOverviewData;
+  onNavigate: (path: string) => void;
+  recommendationState: ApiResourceState<ApiRecommendation[]>;
+  topOpportunityState: ApiResourceState<ApiOpportunity[]>;
+}) {
+  const topOpportunities = (topOpportunityState.data ?? []).map(mapOpportunity).slice(0, 5);
+
+  return (
+    <div className="dashboard-overview-grid">
+      <DashboardMetricGrid data={data} recommendationCount={recommendationState.data?.length} />
+      <DashboardPanel className="dashboard-panel-recommendations" title="AI Recommendation Today" action="View All" onAction={() => onNavigate("/dashboard/ai-recommendation-today")}>
+        <PanelApiState state={recommendationState} emptyTitle="Tidak ada data yang cocok.">
+          {(items) => <RecommendationList items={items.slice(0, 3)} />}
+        </PanelApiState>
+        <button className="panel-footer-button" type="button" onClick={() => onNavigate("/dashboard/ai-recommendation-today")}>Explore More Recommendations</button>
+      </DashboardPanel>
+      <DashboardPanel title="Campaign Overview" action="View All" onAction={() => onNavigate("/dashboard/campaign-overview")}>
+        <PanelApiState state={campaignState} emptyTitle="Tidak ada data yang cocok.">
+          {(items) => <CampaignOverviewList items={items.slice(0, 5)} />}
+        </PanelApiState>
+        <button className="panel-footer-button" type="button" onClick={() => onNavigate("/dashboard/campaign-overview")}>Manage Campaigns</button>
+      </DashboardPanel>
+      <DashboardPanel className="dashboard-panel-calendar" title="Publishing Calendar Preview" action="Today" onAction={() => onNavigate("/dashboard/publishing-calendar-preview")}>
+        <PanelApiState state={calendarState} emptyTitle="Tidak ada data yang cocok.">
+          {(items) => <PublishingPreviewPanel schedules={items.map(mapSchedule)} />}
+        </PanelApiState>
+        <button className="panel-footer-button" type="button" onClick={() => onNavigate("/dashboard/publishing-calendar-preview")}>View Full Calendar</button>
+      </DashboardPanel>
+      <DashboardPanel className="dashboard-panel-top" title="Top Opportunities" action="View Full Opportunities" onAction={() => onNavigate("/ai-clip-intelligence/top-20-opportunities")}>
+        <PanelApiState state={topOpportunityState} emptyTitle="Tidak ada data yang cocok.">
+          {() => <TopOpportunityRanking items={topOpportunities} />}
+        </PanelApiState>
+      </DashboardPanel>
+      <DashboardPanel title="Insights at a Glance">
+        <InsightsAtGlance data={data} opportunities={topOpportunities} />
+      </DashboardPanel>
+    </div>
+  );
+}
+
+function DashboardPanel({ action, children, className = "", onAction, title }: { action?: string; children: ReactNode; className?: string; onAction?: () => void; title: string }) {
+  return (
+    <section className={`section-card dashboard-panel ${className}`}>
+      <SectionTitle title={title} action={action} onAction={onAction} />
+      {children}
+    </section>
+  );
+}
+
+function PanelApiState<T extends unknown[]>({ children, emptyTitle, state }: { children: (data: T) => ReactNode; emptyTitle: string; state: ApiResourceState<T> }) {
+  if (state.loading) {
+    return <div className="dashboard-skeleton"><span /><span /><span /></div>;
+  }
+
+  if (state.error) {
+    return <EmptyState title="Unable to load database data" description={state.error} />;
+  }
+
+  if (!state.data || state.data.length === 0) {
+    return <EmptyState title={emptyTitle} description="Data dari API kosong untuk panel ini." />;
+  }
+
+  return <>{children(state.data)}</>;
+}
+
+function CampaignOverviewList({ items }: { items: ApiCampaign[] }) {
+  return (
+    <div className="dashboard-list">
+      {items.map((item) => (
+        <article className="dashboard-list-row" key={item.id}>
+          <div className="mini-thumb">{item.name.slice(0, 2).toUpperCase()}</div>
+          <div className="dashboard-list-copy">
+            <strong>{item.name}</strong>
+            <span>{formatEnumLabel(item.platform)}{item.category ? ` - ${item.category.name}` : ""}</span>
+          </div>
+          <StatusBadge label={formatEnumLabel(item.status)} tone={item.status === "FAILED" ? "red" : item.status === "PAUSED" ? "amber" : "green"} />
+          <div className="dashboard-score">
+            <small>Items</small>
+            <strong>{item._count?.opportunities ?? 0}</strong>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function PublishingPreviewPanel({ schedules }: { schedules: ScheduleItem[] }) {
+  const rows = schedules.slice(0, 8);
+
+  return (
+    <div className="calendar-preview-list">
+      {rows.map((schedule) => (
+        <article className="calendar-preview-item" key={schedule.id}>
+          <span className="schedule-time">{schedule.time}</span>
+          <SocialIcon platform={schedule.platform} size="small" />
+          <div className="dashboard-list-copy">
+            <strong>{schedule.title}</strong>
+            <span>{schedule.day} - {schedule.status}</span>
+          </div>
+          {schedule.sourceType && <StatusBadge label={schedule.sourceType} tone={schedule.sourceType === "DEMO" ? "blue" : "slate"} />}
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function TopOpportunityRanking({ items }: { items: VideoOpportunity[] }) {
+  return (
+    <div className="ranking-list">
+      {items.map((item, index) => (
+        <article className="ranking-row" key={item.id}>
+          <span className="rank-badge">{index + 1}</span>
+          <div className="dashboard-list-copy">
+            <strong>{item.title}</strong>
+            <span>{item.niche}</span>
+          </div>
+          <strong>{item.opportunityScore ?? item.clippingScore}</strong>
+          <div className="rank-progress"><span style={{ width: `${item.opportunityScore ?? item.clippingScore}%` }} /></div>
+          {item.sourceType && <StatusBadge label={item.sourceType} tone={item.sourceType === "DEMO" ? "blue" : "slate"} />}
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function InsightsAtGlance({ data, opportunities }: { data: DashboardOverviewData; opportunities: VideoOpportunity[] }) {
+  const avgScore = opportunities.length ? Math.round(opportunities.reduce((total, item) => total + (item.opportunityScore ?? item.clippingScore), 0) / opportunities.length) : 0;
+  const published = data.totals.publishedPosts;
+  const scheduled = data.totals.scheduledPosts;
+
+  return (
+    <div className="insight-grid">
+      <article className="mini-stat">
+        <span>Avg Opportunity Score</span>
+        <strong>{avgScore}</strong>
+        <small>From top opportunities</small>
+      </article>
+      <article className="mini-stat">
+        <span>Scheduled / Published</span>
+        <strong>{scheduled}/{published}</strong>
+        <small>Publishing status</small>
+      </article>
+      <article className="mini-stat">
+        <span>Failed Posts</span>
+        <strong>{data.totals.failedPosts}</strong>
+        <small>Needs attention</small>
+      </article>
+      <div className="dashboard-tip">
+        <Sparkles size={18} />
+        <span>Tip: keep a steady publishing rhythm and start from the highest opportunity score.</span>
+      </div>
+    </div>
   );
 }
 
@@ -2142,3 +2300,4 @@ function usePersistentState<T>(key: string, initialValue: T) {
 
   return [value, setValue] as const;
 }
+

@@ -126,7 +126,7 @@ export function AppSidebar({ activePage, activePath, collapsed, mobileOpen, onNa
           {!collapsed && (
             <div>
               <strong>FVN</strong>
-              <span>AI CLIPPER</span>
+              <span>Clipper</span>
             </div>
           )}
         </div>

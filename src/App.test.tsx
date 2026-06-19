@@ -116,7 +116,7 @@ describe("FVN AI Clipper app", () => {
     expect(screen.getByRole("button", { name: /Dashboard/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /AI Clip Intelligence/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Campaign Clipper/i })).toBeInTheDocument();
-    expect(screen.getByText(/Welcome back, Andika/i)).toBeInTheDocument();
+    expect(screen.getByText("Dashboard Overview")).toBeInTheDocument();
 
     const sidebarMenu = Array.from(container.querySelectorAll(".nav-item span")).map((node) => node.textContent);
     expect(sidebarMenu).toEqual(navItems.map((item) => item.label));
@@ -164,7 +164,7 @@ describe("FVN AI Clipper app", () => {
   it("loads dashboard overview and opens database top 20 opportunities", async () => {
     const { container } = render(<App />);
 
-    await waitFor(() => expect(screen.getByText("Opportunities")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Total Projects")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "AI Clip Intelligence" }));
     fireEvent.click(screen.getAllByRole("button", { name: "Top 20 Opportunities" })[0]);
