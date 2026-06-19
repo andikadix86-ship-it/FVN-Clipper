@@ -110,13 +110,13 @@ describe("FVN AI Clipper app", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders the primary navigation and dashboard", () => {
+  it("renders the primary navigation and dashboard", async () => {
     const { container } = render(<App />);
 
     expect(screen.getByRole("button", { name: /Dashboard/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /AI Clip Intelligence/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Campaign Clipper/i })).toBeInTheDocument();
-    expect(screen.getByText("Dashboard Overview")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Dashboard Overview")).toBeInTheDocument());
 
     const sidebarMenu = Array.from(container.querySelectorAll(".nav-item span")).map((node) => node.textContent);
     expect(sidebarMenu).toEqual(navItems.map((item) => item.label));

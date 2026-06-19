@@ -613,21 +613,19 @@ function Dashboard({
   }
 
   return (
-    <>
-      <DashboardHero demoMode={isDashboardDemoMode} />
-      <ApiStateViewObject state={overview} emptyTitle="No dashboard overview data" emptyDescription="Database returned no overview metrics.">
-        {(data) => (
-          <DashboardOverviewLayout
-            calendarState={calendarState}
-            campaignState={campaignState}
-            data={data}
-            onNavigate={onNavigate}
-            recommendationState={recommendationState}
-            topOpportunityState={topOpportunityState}
-          />
-        )}
-      </ApiStateViewObject>
-    </>
+    <ApiStateViewObject state={overview} emptyTitle="No dashboard overview data" emptyDescription="Database returned no overview metrics.">
+      {(data) => (
+        <DashboardOverviewLayout
+          calendarState={calendarState}
+          campaignState={campaignState}
+          data={data}
+          demoMode={isDashboardDemoMode}
+          onNavigate={onNavigate}
+          recommendationState={recommendationState}
+          topOpportunityState={topOpportunityState}
+        />
+      )}
+    </ApiStateViewObject>
   );
 }
 
@@ -1236,6 +1234,7 @@ function DashboardOverviewLayout({
   calendarState,
   campaignState,
   data,
+  demoMode,
   onNavigate,
   recommendationState,
   topOpportunityState
@@ -1243,6 +1242,7 @@ function DashboardOverviewLayout({
   calendarState: ApiResourceState<ApiPublishingSchedule[]>;
   campaignState: ApiResourceState<ApiCampaign[]>;
   data: DashboardOverviewData;
+  demoMode: boolean;
   onNavigate: (path: string) => void;
   recommendationState: ApiResourceState<ApiRecommendation[]>;
   topOpportunityState: ApiResourceState<ApiOpportunity[]>;
@@ -1250,34 +1250,43 @@ function DashboardOverviewLayout({
   const topOpportunities = (topOpportunityState.data ?? []).map(mapOpportunity).slice(0, 5);
 
   return (
-    <div className="dashboard-overview-grid">
-      <DashboardMetricGrid data={data} recommendationCount={recommendationState.data?.length} />
-      <DashboardPanel className="dashboard-panel-recommendations" title="AI Recommendation Today" action="View All" onAction={() => onNavigate("/dashboard/ai-recommendation-today")}>
-        <PanelApiState state={recommendationState} emptyTitle="Tidak ada data yang cocok.">
-          {(items) => <RecommendationList items={items.slice(0, 3)} />}
-        </PanelApiState>
-        <button className="panel-footer-button" type="button" onClick={() => onNavigate("/dashboard/ai-recommendation-today")}>Explore More Recommendations</button>
-      </DashboardPanel>
-      <DashboardPanel title="Campaign Overview" action="View All" onAction={() => onNavigate("/dashboard/campaign-overview")}>
-        <PanelApiState state={campaignState} emptyTitle="Tidak ada data yang cocok.">
-          {(items) => <CampaignOverviewList items={items.slice(0, 5)} />}
-        </PanelApiState>
-        <button className="panel-footer-button" type="button" onClick={() => onNavigate("/dashboard/campaign-overview")}>Manage Campaigns</button>
-      </DashboardPanel>
-      <DashboardPanel className="dashboard-panel-calendar" title="Publishing Calendar Preview" action="Today" onAction={() => onNavigate("/dashboard/publishing-calendar-preview")}>
-        <PanelApiState state={calendarState} emptyTitle="Tidak ada data yang cocok.">
-          {(items) => <PublishingPreviewPanel schedules={items.map(mapSchedule)} />}
-        </PanelApiState>
-        <button className="panel-footer-button" type="button" onClick={() => onNavigate("/dashboard/publishing-calendar-preview")}>View Full Calendar</button>
-      </DashboardPanel>
-      <DashboardPanel className="dashboard-panel-top" title="Top Opportunities" action="View Full Opportunities" onAction={() => onNavigate("/ai-clip-intelligence/top-20-opportunities")}>
-        <PanelApiState state={topOpportunityState} emptyTitle="Tidak ada data yang cocok.">
-          {() => <TopOpportunityRanking items={topOpportunities} />}
-        </PanelApiState>
-      </DashboardPanel>
-      <DashboardPanel title="Insights at a Glance">
-        <InsightsAtGlance data={data} opportunities={topOpportunities} />
-      </DashboardPanel>
+    <div className="dashboard-page">
+      <section className="dashboard-top-section">
+        <DashboardHero demoMode={demoMode} />
+        <DashboardMetricGrid data={data} recommendationCount={recommendationState.data?.length} />
+      </section>
+
+      <section className="dashboard-middle-grid">
+        <DashboardPanel className="dashboard-panel-recommendations" title="AI Recommendation Today" action="View All" onAction={() => onNavigate("/dashboard/ai-recommendation-today")}>
+          <PanelApiState state={recommendationState} emptyTitle="Tidak ada data yang cocok.">
+            {(items) => <RecommendationList items={items.slice(0, 3)} />}
+          </PanelApiState>
+          <button className="panel-footer-button" type="button" onClick={() => onNavigate("/dashboard/ai-recommendation-today")}>Explore More Recommendations</button>
+        </DashboardPanel>
+        <DashboardPanel title="Campaign Overview" action="View All" onAction={() => onNavigate("/dashboard/campaign-overview")}>
+          <PanelApiState state={campaignState} emptyTitle="Tidak ada data yang cocok.">
+            {(items) => <CampaignOverviewList items={items.slice(0, 5)} />}
+          </PanelApiState>
+          <button className="panel-footer-button" type="button" onClick={() => onNavigate("/dashboard/campaign-overview")}>Manage Campaigns</button>
+        </DashboardPanel>
+        <DashboardPanel className="dashboard-panel-calendar" title="Publishing Calendar Preview" action="Today" onAction={() => onNavigate("/dashboard/publishing-calendar-preview")}>
+          <PanelApiState state={calendarState} emptyTitle="Tidak ada data yang cocok.">
+            {(items) => <PublishingPreviewPanel schedules={items.map(mapSchedule)} />}
+          </PanelApiState>
+          <button className="panel-footer-button" type="button" onClick={() => onNavigate("/dashboard/publishing-calendar-preview")}>View Full Calendar</button>
+        </DashboardPanel>
+      </section>
+
+      <section className="dashboard-bottom-grid">
+        <DashboardPanel className="dashboard-panel-top" title="Top Opportunities" action="View Full Opportunities" onAction={() => onNavigate("/ai-clip-intelligence/top-20-opportunities")}>
+          <PanelApiState state={topOpportunityState} emptyTitle="Tidak ada data yang cocok.">
+            {() => <TopOpportunityRanking items={topOpportunities} />}
+          </PanelApiState>
+        </DashboardPanel>
+        <DashboardPanel title="Insights at a Glance">
+          <InsightsAtGlance data={data} opportunities={topOpportunities} />
+        </DashboardPanel>
+      </section>
     </div>
   );
 }
