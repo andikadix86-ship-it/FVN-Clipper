@@ -1,4 +1,4 @@
-# Environment Setup
+﻿# Environment Setup
 
 Do not commit a real `.env` or `.env.local` file. Use `.env.example` as the safe template, then create your own local `.env.local` with real secrets.
 
@@ -12,13 +12,36 @@ Do not commit a real `.env` or `.env.local` file. Use `.env.example` as the safe
 - `DATABASE_URL`: Required when a backend/database is connected.
 - `DIRECT_URL`: Optional direct database connection URL, usually used by migration tooling.
 
-## AI providers
+## AI provider
 
-- `GEMINI_API_KEY`: Required for Gemini features.
-- `OPENAI_API_KEY`: Required for OpenAI features.
-- `ANTHROPIC_API_KEY`: Required for Claude/Anthropic features.
+AI features use one OpenAI-compatible adapter. Configure the active provider with these server-side values:
 
-These are server-side secrets. Do not expose them in client-side code.
+- `AI_PROVIDER`: `openai`, `deepseek`, or `qwen`. Default behavior uses `openai`.
+- `AI_API_KEY`: Generic API key fallback for the active provider.
+- `AI_BASE_URL`: Optional override for the active provider base URL.
+- `AI_MODEL`: Optional override for the active provider model.
+- `AI_FALLBACK_PROVIDER`: Optional fallback provider name.
+- `AI_FALLBACK_API_KEY`: Optional fallback key. If empty, provider-specific key or `AI_API_KEY` can still be used.
+- `AI_FALLBACK_BASE_URL`: Optional fallback base URL override.
+- `AI_FALLBACK_MODEL`: Optional fallback model override.
+
+Provider-specific variables are also supported:
+
+- `OPENAI_API_KEY`, `OPENAI_MODEL`
+- `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`, `DEEPSEEK_MODEL`
+- `QWEN_API_KEY`, `QWEN_BASE_URL`, `QWEN_MODEL`
+
+Resolution rules:
+
+- `AI_PROVIDER=openai` uses `OPENAI_API_KEY` or `AI_API_KEY`.
+- `AI_PROVIDER=deepseek` uses `DEEPSEEK_API_KEY` or `AI_API_KEY`.
+- `AI_PROVIDER=qwen` uses `QWEN_API_KEY` or `AI_API_KEY`.
+- `AI_BASE_URL` overrides provider base URL for the primary provider.
+- `AI_MODEL` overrides provider model for the primary provider.
+- If the primary provider request fails, the server retries the fallback provider when fallback env is configured.
+- If no configured provider succeeds, API routes return a JSON error with a user-friendly message instead of crashing the UI.
+
+These are server-side secrets. Do not expose them in client-side code. Settings displays only provider status and masked keys.
 
 ## YouTube / Google
 
@@ -33,7 +56,7 @@ These are server-side secrets. Do not expose them in client-side code.
 - `TIKTOK_CLIENT_SECRET`: Required for TikTok OAuth.
 - `TIKTOK_REDIRECT_URI`: OAuth callback URL. Local example: `http://localhost:3000/api/auth/tiktok/callback`.
 
-## Meta / Instagram / Facebook OAuth
+## Meta / Instagram / Facebook
 
 - `META_APP_ID`: Required for Meta OAuth.
 - `META_APP_SECRET`: Required for Meta OAuth.
@@ -59,7 +82,7 @@ These are server-side secrets. Do not expose them in client-side code.
 
 ## UI status behavior
 
-The current frontend can safely read public feature flags only. Secret provider keys are intentionally treated as server-side configuration. In demo mode, Settings shows provider and integration cards as `Demo Mode` or `Not Connected` instead of exposing secrets.
+The frontend reads public feature flags and asks the local API for safe AI provider status. Secret provider keys are masked by the backend before they reach the browser.
 
 ## Local redirect URI examples
 

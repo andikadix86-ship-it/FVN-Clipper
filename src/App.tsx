@@ -48,6 +48,7 @@ import {
   toApiPerformance,
   toApiPlatform,
   toApiStatus,
+  type ApiAiProviderStatus,
   type ApiCampaign,
   type ApiCategory,
   type ApiCompetitor,
@@ -2278,8 +2279,10 @@ function AnalyticsContent({ activeSub, contentCount, scheduleCount }: { activeSu
 }
 
 function SettingsContent({ activeSub }: { activeSub: SubNavItem }) {
+  const aiProviderState = useApiResource<ApiAiProviderStatus>("/api/ai/provider/status", activeSub.key === "ai-providers");
+
   if (activeSub.key === "ai-providers") {
-    return <EnvStatusPanel title="AI Providers" description="Secret keys stay server-side. The UI reads public feature flags and shows safe provider status." items={aiProviderEnvStatus} />;
+    return <AiProviderSettingsPanel state={aiProviderState} fallbackItems={aiProviderEnvStatus} />;
   }
 
   if (activeSub.key === "social-integrations") {
@@ -2318,6 +2321,75 @@ function SettingsContent({ activeSub }: { activeSub: SubNavItem }) {
   );
 }
 
+function AiProviderSettingsPanel({ state, fallbackItems }: { state: ApiResourceState<ApiAiProviderStatus>; fallbackItems: EnvStatusItem[] }) {
+  const data = state.data;
+
+  return (
+    <div className="section-grid two" data-testid="ai-provider-settings">
+      <section className="section-card">
+        <SectionTitle title="AI Provider Active" action={state.loading ? "Loading" : "OpenAI Compatible"} />
+        <p className="muted env-description">Provider status comes from the backend. API keys are masked before reaching the browser.</p>
+        {state.loading && <EmptyState title="Loading AI provider status..." description="Checking server-side provider configuration." />}
+        {state.error && <EmptyState title="Unable to load AI provider status" description={state.error} />}
+        {data && (
+          <>
+            <div className="ai-provider-summary">
+              <span>Active provider</span>
+              <strong>{formatAiProviderName(data.activeProvider)}</strong>
+              <StatusBadge label={data.configured ? "Configured" : "Missing"} tone={data.configured ? "green" : "red"} />
+            </div>
+            <p className="muted">{data.message}</p>
+            <div className="env-status-grid">
+              {data.providers.map((provider) => (
+                <article className="env-status-card ai-provider-card" key={`${provider.role}-${provider.provider}`}>
+                  <div className="row between gap">
+                    <strong>{provider.role === "primary" ? "Primary" : "Fallback"}: {formatAiProviderName(provider.provider)}</strong>
+                    <StatusBadge label={provider.status} tone={provider.configured ? "green" : "red"} />
+                  </div>
+                  <div className="ai-provider-meta">
+                    <span>Model</span>
+                    <code>{provider.model ?? "missing"}</code>
+                    <span>Base URL</span>
+                    <code>{provider.baseUrl ?? "provider default"}</code>
+                    <span>API key</span>
+                    <code>{provider.maskedApiKey}</code>
+                  </div>
+                  {provider.missing.length > 0 && (
+                    <div className="tag-cloud env-warning-list">
+                      {provider.missing.map((item) => (
+                        <StatusBadge label={`Missing: ${item}`} tone="amber" key={item} />
+                      ))}
+                    </div>
+                  )}
+                </article>
+              ))}
+              {!data.fallback && (
+                <article className="env-status-card ai-provider-card">
+                  <div className="row between gap">
+                    <strong>Fallback Provider</strong>
+                    <StatusBadge label="Not Configured" tone="amber" />
+                  </div>
+                  <p>Isi AI_FALLBACK_PROVIDER, AI_FALLBACK_API_KEY, dan AI_FALLBACK_MODEL jika ingin retry otomatis saat provider utama gagal.</p>
+                </article>
+              )}
+            </div>
+          </>
+        )}
+      </section>
+      <EnvStatusPanel title="AI Provider ENV" description="Safe template for OpenAI, DeepSeek, Qwen, and fallback provider configuration." items={fallbackItems} />
+    </div>
+  );
+}
+
+function formatAiProviderName(provider: string) {
+  const names: Record<string, string> = {
+    openai: "OpenAI",
+    deepseek: "DeepSeek",
+    qwen: "Qwen"
+  };
+
+  return names[provider] ?? formatEnumLabel(provider);
+}
 function EnvStatusPanel({ title, description, items }: { title: string; description: string; items: EnvStatusItem[] }) {
   return (
     <section className="section-card">

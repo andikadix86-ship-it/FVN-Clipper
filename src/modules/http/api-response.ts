@@ -10,12 +10,15 @@ export function jsonResponse(data: unknown, init: ResponseInit = {}) {
 
 export function errorResponse(error: unknown) {
   const message = error instanceof Error ? error.message : "Unexpected API error";
+  const errorStatus = (error as { statusCode?: unknown } | null)?.statusCode;
+  const status = typeof errorStatus === "number" ? errorStatus : 500;
 
   return jsonResponse(
     {
       error: message,
-      data: null
+      data: null,
+      success: false
     },
-    { status: 500 }
+    { status }
   );
 }

@@ -9,6 +9,8 @@ try {
 }
 
 const { getCategories, getCompetitors, getOpportunities, setOpportunitySaved } = await import("../src/modules/ai-clip-intelligence/ai-clip-service");
+const { generateAiFeatureContent } = await import("../src/modules/ai/ai-feature-service");
+const { getAiProviderPublicStatus } = await import("../src/modules/ai/ai-provider");
 const { getDashboardCampaigns, getDashboardOverview, getDashboardRecommendations, getPublishingCalendar } = await import("../src/modules/dashboard/dashboard-service");
 
 const PORT = Number(process.env.API_PORT ?? 3001);
@@ -39,6 +41,17 @@ async function routeRequest(request: IncomingMessage, response: ServerResponse) 
 
   if (method === "GET" && pathname === "/api/health") {
     sendJson(response, { success: true, data: { ok: true } });
+    return;
+  }
+
+  if (method === "GET" && pathname === "/api/ai/provider/status") {
+    sendData(response, getAiProviderPublicStatus());
+    return;
+  }
+
+  if (method === "POST" && pathname === "/api/ai/generate") {
+    const body = await readJsonBody(request);
+    sendData(response, await generateAiFeatureContent(body));
     return;
   }
 
@@ -124,7 +137,7 @@ async function routeRequest(request: IncomingMessage, response: ServerResponse) 
 function sendJson(response: ServerResponse, body: unknown, status = 200) {
   response.writeHead(status, {
     "access-control-allow-headers": "content-type",
-    "access-control-allow-methods": "GET,PATCH,OPTIONS",
+    "access-control-allow-methods": "GET,POST,PATCH,OPTIONS",
     "access-control-allow-origin": "*",
     "content-type": "application/json; charset=utf-8"
   });
@@ -164,7 +177,8 @@ function isDemoData(data: unknown): boolean {
 
 function sendError(response: ServerResponse, error: unknown) {
   const message = error instanceof Error ? error.message : "Unexpected API error";
-  const status = message.includes("Database belum dikonfigurasi") ? 503 : 500;
+  const errorStatus = (error as { statusCode?: unknown } | null)?.statusCode;
+  const status = typeof errorStatus === "number" ? errorStatus : message.includes("Database belum dikonfigurasi") ? 503 : 500;
   sendJson(response, { success: false, data: null, error: message }, status);
 }
 

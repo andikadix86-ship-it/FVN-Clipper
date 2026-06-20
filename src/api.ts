@@ -103,6 +103,36 @@ export interface ApiCompetitor {
   sourceType: SourceType;
 }
 
+export interface ApiAiProviderConfig {
+  role: "primary" | "fallback";
+  provider: "openai" | "deepseek" | "qwen";
+  configured: boolean;
+  status: "Configured" | "Missing";
+  maskedApiKey: string;
+  keySource?: string;
+  baseUrl?: string;
+  baseUrlSource?: string;
+  model?: string;
+  modelSource?: string;
+  missing: string[];
+}
+
+export interface ApiAiProviderStatus {
+  activeProvider: ApiAiProviderConfig["provider"];
+  configured: boolean;
+  message: string;
+  primary: ApiAiProviderConfig;
+  fallback?: ApiAiProviderConfig;
+  providers: ApiAiProviderConfig[];
+}
+
+export interface ApiAiGenerateResult {
+  feature: string;
+  output: string;
+  provider: string;
+  model: string;
+  fallbackUsed: boolean;
+}
 export interface DashboardOverviewData {
   mode?: "DEMO";
   sourceType?: SourceType;

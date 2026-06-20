@@ -61,10 +61,11 @@ function integration(name: string, required: string[], note: string): EnvStatusI
 }
 
 export const aiProviderEnvStatus: EnvStatusItem[] = [
-  integration("Gemini", ["GEMINI_API_KEY"], "Server-side key required for Gemini clip intelligence."),
-  integration("OpenAI", ["OPENAI_API_KEY"], "Server-side key required for OpenAI caption and advisor flows."),
-  integration("Claude", ["ANTHROPIC_API_KEY"], "Server-side key required for Anthropic/Claude workflows."),
-  integration("Custom Provider", ["Custom provider endpoint/key"], "Optional custom AI provider placeholder.")
+  integration("Active AI Provider", ["AI_PROVIDER", "AI_API_KEY", "AI_MODEL"], "Server-side OpenAI-compatible provider used by every AI workflow."),
+  integration("OpenAI", ["OPENAI_API_KEY or AI_API_KEY", "OPENAI_MODEL or AI_MODEL"], "Use ChatGPT/OpenAI models through the shared provider adapter."),
+  integration("DeepSeek", ["DEEPSEEK_API_KEY or AI_API_KEY", "DEEPSEEK_BASE_URL", "DEEPSEEK_MODEL or AI_MODEL"], "Use DeepSeek through the OpenAI-compatible client."),
+  integration("Qwen", ["QWEN_API_KEY or AI_API_KEY", "QWEN_BASE_URL", "QWEN_MODEL or AI_MODEL"], "Use Qwen through a configured OpenAI-compatible base URL."),
+  integration("Fallback Provider", ["AI_FALLBACK_PROVIDER", "AI_FALLBACK_API_KEY", "AI_FALLBACK_MODEL"], "Optional provider retried when the primary provider fails.")
 ];
 
 export const socialIntegrationEnvStatus: EnvStatusItem[] = [

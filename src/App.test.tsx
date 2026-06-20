@@ -59,6 +59,44 @@ const apiOpportunities = opportunities.map((item, index) => ({
 }));
 
 function mockApiResponse(url: string, init?: RequestInit) {
+  if (url.includes("/api/ai/provider/status")) {
+    return {
+      data: {
+        activeProvider: "openai",
+        configured: true,
+        message: "AI provider aktif dan siap dipakai.",
+        primary: {
+          role: "primary",
+          provider: "openai",
+          configured: true,
+          status: "Configured",
+          maskedApiKey: "sk-t...7890",
+          keySource: "OPENAI_API_KEY",
+          baseUrl: "https://api.openai.com/v1",
+          baseUrlSource: "openai default",
+          model: "gpt-4o-mini",
+          modelSource: "AI_MODEL",
+          missing: []
+        },
+        providers: [
+          {
+            role: "primary",
+            provider: "openai",
+            configured: true,
+            status: "Configured",
+            maskedApiKey: "sk-t...7890",
+            keySource: "OPENAI_API_KEY",
+            baseUrl: "https://api.openai.com/v1",
+            baseUrlSource: "openai default",
+            model: "gpt-4o-mini",
+            modelSource: "AI_MODEL",
+            missing: []
+          }
+        ]
+      }
+    };
+  }
+
   if (init?.method === "PATCH") {
     return { data: { ...apiOpportunities[0], isSaved: !apiOpportunities[0].isSaved } };
   }
@@ -273,14 +311,19 @@ describe("FVN AI Clipper app", () => {
     expect(screen.getAllByText("Not Connected").length).toBeGreaterThan(0);
   });
 
-  it("shows safe environment status in Settings integrations", () => {
+  it("shows safe environment status in Settings integrations", async () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     fireEvent.click(screen.getAllByRole("button", { name: "AI Providers" })[0]);
     expect(window.location.pathname).toBe("/settings/ai-providers");
-    expect(screen.getByText("Gemini")).toBeInTheDocument();
-    expect(screen.getAllByText("Demo Mode").length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getByTestId("ai-provider-settings")).toBeInTheDocument());
+    expect(screen.getByText("AI Provider Active")).toBeInTheDocument();
+    expect(screen.getAllByText("OpenAI").length).toBeGreaterThan(0);
+    expect(screen.getByText("DeepSeek")).toBeInTheDocument();
+    expect(screen.getByText("Qwen")).toBeInTheDocument();
+    expect(screen.getByText("sk-t...7890")).toBeInTheDocument();
+    expect(screen.queryByText("sk-test-full-key-1234567890")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Social Integrations" })[0]);
     expect(window.location.pathname).toBe("/settings/social-integrations");
