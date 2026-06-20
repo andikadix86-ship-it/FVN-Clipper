@@ -6,10 +6,15 @@ export const clipStudioPromptSchema = {
       title: "string",
       hook: "string",
       angle: "string",
+      startTime: "HH:MM:SS",
+      endTime: "HH:MM:SS",
       suggestedDuration: "string",
       viralScore: "number",
+      category: "string",
       reason: "string",
       caption: "string",
+      hashtags: ["string"],
+      cta: "string",
       platformFit: "string"
     }
   ]

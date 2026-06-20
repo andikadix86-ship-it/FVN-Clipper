@@ -191,9 +191,11 @@ describe("FVN AI Clipper app", () => {
 
     expect(window.location.pathname).toBe("/clip-studio/source-video");
     expect(screen.getByTestId("clip-studio-source-video-new")).toBeInTheDocument();
-    expect(screen.getByText("Mendukung durasi hingga 3 jam")).toBeInTheDocument();
+    expect(screen.getByText("Mendukung durasi hingga 3 jam untuk link video publik")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Generate Clips" }));
+    fireEvent.click(screen.getByRole("button", { name: "Analyze Source" }));
+    await waitFor(() => expect(screen.getByTestId("clip-studio-analysis-summary")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Generate Viral Clips" }));
     await waitFor(() => expect(screen.getAllByTestId("clip-studio-card")).toHaveLength(3));
 
     const firstClipTitle = screen.getAllByTestId("clip-studio-card")[0].querySelector("h3")?.textContent ?? "";
@@ -214,8 +216,11 @@ describe("FVN AI Clipper app", () => {
     render(<App />);
 
     expect(screen.getByTestId("clip-studio-source-video-new")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Paste video URL...")).toBeInTheDocument();
-    expect(screen.getByText("Mendukung durasi hingga 3 jam")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Paste YouTube, TikTok, Instagram/Reels, or video URL...")).toBeInTheDocument();
+    expect(screen.getByText("Mendukung durasi hingga 3 jam untuk link video publik")).toBeInTheDocument();
+    expect(screen.getByText("YouTube URL")).toBeInTheDocument();
+    expect(screen.getByText("TikTok URL")).toBeInTheDocument();
+    expect(screen.getByText("Instagram/Reels URL")).toBeInTheDocument();
     expect(screen.getByTestId("clip-studio-count")).toHaveValue(String(DEFAULT_CLIP_COUNT));
     expect(screen.getByTestId("clip-studio-quality-1080p")).toHaveAttribute("aria-pressed", "true");
 
@@ -224,19 +229,23 @@ describe("FVN AI Clipper app", () => {
     }
 
     fireEvent.change(screen.getByTestId("clip-studio-duration"), { target: { value: "180" } });
-    expect(screen.getByRole("button", { name: "Generate Clips" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Analyze Source" })).toBeEnabled();
 
     fireEvent.change(screen.getByTestId("clip-studio-duration"), { target: { value: "181" } });
     expect(screen.getByText("Durasi video maksimal 3 jam.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Generate Clips" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Analyze Source" })).toBeDisabled();
 
     fireEvent.change(screen.getByTestId("clip-studio-duration"), { target: { value: "120" } });
-    fireEvent.change(screen.getByTestId("clip-studio-count"), { target: { value: "15" } });
+    fireEvent.change(screen.getByTestId("clip-studio-count"), { target: { value: "10" } });
     fireEvent.click(screen.getByRole("button", { name: "720p HD" }));
-    fireEvent.click(screen.getByRole("button", { name: "Generate Clips" }));
+    fireEvent.click(screen.getByRole("button", { name: "Analyze Source" }));
+    await waitFor(() => expect(screen.getByTestId("clip-studio-analysis-summary")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Generate Viral Clips" }));
 
-    await waitFor(() => expect(screen.getAllByTestId("clip-studio-card")).toHaveLength(15));
-    expect(screen.getAllByText("720p")).toHaveLength(15);
+    await waitFor(() => expect(screen.getAllByTestId("clip-studio-card")).toHaveLength(10));
+    expect(screen.getAllByText(/#aitools|#contentcreator|#productivity|#mindset|#contentstrategy|#businessgrowth|#edutok|#viralvideo/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Start").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("CTA:").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getAllByTestId("clip-studio-action-edit")[0]);
     expect(screen.getByText("Ready for Editor")).toBeInTheDocument();
@@ -274,7 +283,7 @@ describe("FVN AI Clipper app", () => {
 
     const plan = generateClipStudioPlan(payload);
     expect(plan.prompt).toMatch(/Output wajib JSON terstruktur/i);
-    for (const field of ["id", "title", "thumbnail", "duration", "hook", "angle", "viralScore", "quality", "platform", "status", "sourceVideoUrl"]) {
+    for (const field of ["id", "title", "thumbnail", "duration", "startTime", "endTime", "hook", "angle", "category", "viralScore", "quality", "platform", "status", "sourceVideoUrl", "caption", "suggestedHashtags", "cta", "reason"]) {
       expect(plan.clips[0]).toHaveProperty(field);
     }
   });

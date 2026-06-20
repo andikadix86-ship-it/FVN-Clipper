@@ -44,14 +44,19 @@ export interface ClipStudioClipResult {
   title: string;
   thumbnail: string;
   duration: string;
+  startTime: string;
+  endTime: string;
   hook: string;
   angle: string;
+  category: string;
   viralScore: number;
   quality: ClipStudioVideoQuality;
   platform: ClipStudioTargetPlatform;
   status: "Ready for Review" | "Ready for Editor" | "Saved to Library" | "Ready for Schedule";
   sourceVideoUrl: string;
   caption: string;
+  suggestedHashtags: string[];
+  cta: string;
   reason: string;
 }
 
@@ -148,24 +153,51 @@ function generateDemoClipResults(payload: ClipStudioGeneratePayload, metadata: C
     const hook = `${hookSeeds[index % hookSeeds.length]} (${clipNumber})`;
     const angle = `${angleSeeds[index % angleSeeds.length]} untuk ${payload.targetPlatform}`;
 
+    const duration = durations[index % durations.length];
+    const startTime = formatTimecode(getDemoStartSecond(payload.sourceDurationMinutes, index));
+    const endTime = formatTimecode(getDemoStartSecond(payload.sourceDurationMinutes, index) + parseDurationSeconds(duration));
+    const category = categorySeeds[index % categorySeeds.length];
+
     return {
       id: `clip-studio-${clipNumber}`,
       title,
       thumbnail: createClipStudioThumbnail(`Clip ${clipNumber}`, payload.videoQuality, 720, 405, index + 1),
-      duration: durations[index % durations.length],
+      duration,
+      startTime,
+      endTime,
       hook,
       angle,
+      category,
       viralScore,
       quality: payload.videoQuality,
       platform: payload.targetPlatform,
       status: "Ready for Review",
       sourceVideoUrl: metadata.videoUrl,
       caption: `${hook} Simpan ide ini dan jadikan short clip siap publish.`,
-      reason: "Demo generator memilih segmen dengan hook cepat, konteks mandiri, dan potensi retention tinggi."
+      suggestedHashtags: hashtagSeeds[index % hashtagSeeds.length],
+      cta: ctaSeeds[index % ctaSeeds.length],
+      reason: "Demo fallback memilih segmen dengan hook cepat, konteks mandiri, emotional payoff, dan peluang retention tinggi."
     };
   });
 }
 
+function getDemoStartSecond(durationMinutes: number, index: number) {
+  const safeDurationSeconds = Math.max(durationMinutes * 60 - 90, 90);
+  const base = 35 + index * 127;
+  return Math.min(base % safeDurationSeconds, safeDurationSeconds - 30);
+}
+
+function parseDurationSeconds(duration: string) {
+  const [minutes = "0", seconds = "0"] = duration.split(":");
+  return Number(minutes) * 60 + Number(seconds);
+}
+
+function formatTimecode(totalSeconds: number) {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = Math.floor(totalSeconds % 60);
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
 function normalizeSourceDurationMinutes(durationMinutes: number) {
   const value = Number(durationMinutes);
   if (!Number.isFinite(value) || value <= 0) throw new ClipStudioValidationError("Durasi video tidak valid.", "sourceDurationMinutes");
@@ -246,4 +278,28 @@ const angleSeeds = [
   "Insight personal yang terasa relatable",
   "Breakdown strategi untuk creator",
   "Ringkasan high-retention dari source video"
+];
+
+const categorySeeds = ["AI Tools", "Creator Growth", "Productivity", "Mindset", "Content Strategy", "Business", "Education", "Viral Breakdown"];
+
+const hashtagSeeds = [
+  ["#aitools", "#creatorworkflow", "#shorts"],
+  ["#contentcreator", "#growthtips", "#reels"],
+  ["#productivity", "#timemanagement", "#learnfast"],
+  ["#mindset", "#selfimprovement", "#dailyboost"],
+  ["#contentstrategy", "#viralhooks", "#socialmedia"],
+  ["#businessgrowth", "#creatorbusiness", "#marketingtips"],
+  ["#edutok", "#learnonline", "#knowledge"],
+  ["#viralvideo", "#hookideas", "#shortform"]
+];
+
+const ctaSeeds = [
+  "Save this clip idea before planning your next video.",
+  "Follow for more short-form systems.",
+  "Try this angle on your next upload.",
+  "Send this to your editor and test the hook today.",
+  "Comment 'clip' if you want the template.",
+  "Use this as your next content checklist.",
+  "Turn this insight into one post today.",
+  "Schedule this clip for your next high-engagement slot."
 ];

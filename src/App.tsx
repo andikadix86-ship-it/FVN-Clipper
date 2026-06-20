@@ -68,8 +68,10 @@ import {
   clipStudioTargetPlatforms,
   detectSourcePlatform,
   generateClipStudioPlan,
+  resolveClipStudioMetadata,
   validateSourceVideoUrl,
   type ClipStudioClipResult,
+  type ClipStudioVideoMetadata,
   type ClipStudioTargetPlatform,
   type ClipStudioVideoQuality
 } from "./clip-studio-service";
@@ -376,7 +378,7 @@ export function App() {
       />
       <div className={`app-main ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
         <AppHeader title={activeNav.label} path={activePath} onOpenMobile={() => setMobileOpen(true)} onAction={showToast} onCreateSelect={handleCreateSelect} />
-        <main className={`content-layout ${activePage === "dashboard" ? "dashboard-layout" : ""}`}>
+        <main className={`content-layout ${activePage === "dashboard" ? "dashboard-layout" : ""} ${shouldShowConnectedAccountsPanel(activePage, activeSub.key) ? "has-right-panel" : "no-right-panel"}`}>
           <section className="page-content">
             {activePage !== "dashboard" && <ActiveSubmenuBar items={activeNav.submenu} activePath={activePath} onNavigate={navigate} />}
             <PageRouter
@@ -411,7 +413,7 @@ export function App() {
               scanSummary={scanSummary}
             />
           </section>
-          {activePage !== "dashboard" && <RightPanel accounts={accountList} />}
+          {shouldShowConnectedAccountsPanel(activePage, activeSub.key) && <RightPanel accounts={accountList} />}
         </main>
       </div>
       {analysisTarget && <AnalysisModal item={analysisTarget} onClose={() => setAnalysisTarget(null)} />}
@@ -1577,8 +1579,8 @@ function NicheExplorerResults({ items }: { items: VideoOpportunity[] }) {
   }, {});
 
   return (
-    <div className="section-grid two">
-      <section className="section-card">
+    <div className="niche-explorer-layout">
+      <section className="section-card niche-list-panel">
         <SectionTitle title="Niche Explorer" />
         <div className="tag-cloud">
           {Object.entries(counts).map(([niche, count]) => (
@@ -1586,7 +1588,7 @@ function NicheExplorerResults({ items }: { items: VideoOpportunity[] }) {
           ))}
         </div>
       </section>
-      <section className="section-card">
+      <section className="section-card niche-opportunity-panel">
         <SectionTitle title="Highest Opportunity By Niche" />
         <div className="top-clip-list">
           {items.slice(0, 8).map((item, index) => (
@@ -1844,11 +1846,16 @@ function ClipStudioSourceVideoPanel({
   const [videoQuality, setVideoQuality] = useState<ClipStudioVideoQuality>(DEFAULT_VIDEO_QUALITY);
   const [targetPlatform, setTargetPlatform] = useState<ClipStudioTargetPlatform>("YouTube");
   const [clips, setClips] = useState<ClipStudioClipResult[]>([]);
-  const [notice, setNotice] = useState("UI baru siap. Masukkan link video lalu Generate Clips.");
-  const [generating, setGenerating] = useState(false);
+  const [metadata, setMetadata] = useState<ClipStudioVideoMetadata | null>(null);
+  const [notice, setNotice] = useState("Masukkan link YouTube, TikTok, Instagram/Reels, atau video publik lain untuk dianalisis.");
+  const [workflowStatus, setWorkflowStatus] = useState<"empty" | "analyzing" | "analyzed" | "generating" | "success" | "error">("empty");
+  const [uploadName, setUploadName] = useState("");
 
   useEffect(() => {
     setSourceVideoUrl(selectedSourceUrl);
+    setMetadata(null);
+    setClips([]);
+    setWorkflowStatus("empty");
   }, [selectedSourceUrl]);
 
   const sourcePlatform = useMemo(() => detectSourcePlatform(sourceVideoUrl), [sourceVideoUrl]);
@@ -1862,21 +1869,47 @@ function ClipStudioSourceVideoPanel({
   }, [sourceVideoUrl]);
   const durationError = sourceDurationMinutes > MAX_SOURCE_DURATION_MINUTES ? "Durasi video maksimal 3 jam." : sourceDurationMinutes <= 0 ? "Durasi video tidak valid." : "";
   const countError = clipCount < 1 || clipCount > MAX_CLIP_COUNT ? "Jumlah video harus 1 sampai 15 clip." : "";
-  const canGenerate = !sourceUrlError && !durationError && !countError && !generating;
-  const durationStatus = durationError || sourceUrlError || "Mendukung durasi hingga 3 jam";
+  const isBusy = workflowStatus === "analyzing" || workflowStatus === "generating";
+  const canAnalyze = !sourceUrlError && !durationError && !isBusy;
+  const canGenerate = !sourceUrlError && !durationError && !countError && Boolean(metadata) && !isBusy;
+  const durationStatus = durationError || sourceUrlError || "Mendukung durasi hingga 3 jam untuk link video publik";
 
   const updateClipStatus = (clipId: string, status: ClipStudioClipResult["status"]) => {
     setClips((current) => current.map((clip) => (clip.id === clipId ? { ...clip, status } : clip)));
   };
 
-  const handleGenerate = () => {
-    if (!canGenerate) {
-      setNotice(sourceUrlError || durationError || countError || "Lengkapi form Source Video terlebih dahulu.");
+  const handleAnalyze = () => {
+    if (!canAnalyze) {
+      setWorkflowStatus("error");
+      setNotice(sourceUrlError || durationError || "Lengkapi link source video terlebih dahulu.");
       return;
     }
 
-    setGenerating(true);
-    setNotice("Generating clips...");
+    setWorkflowStatus("analyzing");
+    setNotice("Analyzing source video...");
+    window.setTimeout(() => {
+      try {
+        const nextMetadata = resolveClipStudioMetadata(sourceVideoUrl, sourceDurationMinutes);
+        setMetadata(nextMetadata);
+        setWorkflowStatus("analyzed");
+        setNotice(`DEMO fallback: ${nextMetadata.sourcePlatform} source siap dianalisis. Transcript/API real belum aktif, tetapi flow generate memakai struktur produksi.`);
+      } catch (error) {
+        setMetadata(null);
+        setWorkflowStatus("error");
+        setNotice(error instanceof Error ? error.message : "Analyze source gagal.");
+      }
+    }, 220);
+  };
+
+  const handleGenerate = () => {
+    if (!canGenerate) {
+      setWorkflowStatus("error");
+      setNotice(sourceUrlError || durationError || countError || "Klik Analyze Source sebelum Generate Viral Clips.");
+      return;
+    }
+
+    setWorkflowStatus("generating");
+    setNotice("Generating viral clip recommendations...");
     window.setTimeout(() => {
       try {
         const plan = generateClipStudioPlan({
@@ -1886,22 +1919,27 @@ function ClipStudioSourceVideoPanel({
           videoQuality,
           targetPlatform,
           promptMode: "clip_studio_structured_json",
-          contentGoal: "Generate clip siap edit, library, dan scheduler.",
+          contentGoal: "Generate clip viral lengkap dengan timing, caption, hashtag, CTA, dan action target.",
           language: "id"
         });
+        setMetadata(plan.metadata);
         setClips(plan.clips);
-        setNotice(`${plan.clips.length} clip berhasil dibuat dari ${plan.metadata.sourcePlatform}.`);
+        setWorkflowStatus("success");
+        setNotice(`DEMO fallback: ${plan.clips.length} rekomendasi clip viral dibuat dari ${plan.metadata.sourcePlatform}.`);
       } catch (error) {
-        setNotice(error instanceof Error ? error.message : "Generate clips gagal.");
-      } finally {
-        setGenerating(false);
+        setWorkflowStatus("error");
+        setNotice(error instanceof Error ? error.message : "Generate viral clips gagal.");
       }
-    }, 160);
+    }, 240);
   };
 
   const handleEdit = (clip: ClipStudioClipResult) => {
     updateClipStatus(clip.id, "Ready for Editor");
-    setNotice("Clip siap dibuka di Clip Editor.");
+    setNotice(`${clip.title} siap dikirim ke Clip Editor.`);
+  };
+
+  const handleSubtitle = (clip: ClipStudioClipResult) => {
+    setNotice(`Subtitle demo siap dibuat untuk ${clip.title}. Buka Subtitle Studio untuk styling dan translate.`);
   };
 
   const handleSave = (clip: ClipStudioClipResult) => {
@@ -1916,22 +1954,42 @@ function ClipStudioSourceVideoPanel({
   };
 
   return (
-    <section className="clip-studio-new" data-testid="clip-studio-source-video-new">
+    <section className={`clip-studio-new clip-studio-workflow status-${workflowStatus}`} data-testid="clip-studio-source-video-new">
       <div className="clip-studio-source-card">
         <div className="clip-studio-source-heading">
           <div className="clip-studio-icon"><Link2 size={22} /></div>
           <div>
             <h2>Source Video</h2>
-            <span>Link Video</span>
+            <span>Analyze one long source, then generate viral short clips.</span>
           </div>
+          <StatusBadge label="DEMO fallback" tone="blue" />
+        </div>
+
+        <div className="clip-studio-source-types" aria-label="Supported source types">
+          {[
+            ["YouTube URL", "youtube.com / youtu.be"],
+            ["TikTok URL", "tiktok.com"],
+            ["Instagram/Reels URL", "instagram.com/reel"],
+            ["Video Upload", uploadName || "available when upload API is enabled"]
+          ].map(([label, detail]) => (
+            <div className="clip-studio-source-type" key={label}>
+              <strong>{label}</strong>
+              <span>{detail}</span>
+            </div>
+          ))}
         </div>
 
         <label className="clip-studio-field clip-studio-url-field">
-          <span>Link Video</span>
+          <span>Video URL</span>
           <div className="clip-studio-url-input">
-            <input value={sourceVideoUrl} onChange={(event) => setSourceVideoUrl(event.target.value)} placeholder="Paste video URL..." />
+            <input value={sourceVideoUrl} onChange={(event) => { setSourceVideoUrl(event.target.value); setMetadata(null); setClips([]); setWorkflowStatus("empty"); }} placeholder="Paste YouTube, TikTok, Instagram/Reels, or video URL..." />
             <strong>{sourcePlatform}</strong>
           </div>
+        </label>
+
+        <label className="clip-studio-field">
+          <span>Optional video upload</span>
+          <input type="file" accept="video/*" onChange={(event) => setUploadName(event.target.files?.[0]?.name ?? "")} />
         </label>
 
         <label className="clip-studio-field">
@@ -1940,23 +1998,40 @@ function ClipStudioSourceVideoPanel({
             data-testid="clip-studio-duration"
             type="number"
             min={1}
-            max={240}
+            max={180}
             value={sourceDurationMinutes}
             onChange={(event) => setSourceDurationMinutes(Number(event.target.value))}
           />
         </label>
 
-        <div className={`clip-studio-duration-status ${durationError || sourceUrlError ? "error" : ""}`}>
-          {durationError || sourceUrlError ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
+        <div className={`clip-studio-duration-status ${durationError || sourceUrlError || workflowStatus === "error" ? "error" : ""}`}>
+          {durationError || sourceUrlError || workflowStatus === "error" ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
           <span>{durationStatus}</span>
         </div>
 
+        {metadata && (
+          <div className="clip-studio-analysis-summary" data-testid="clip-studio-analysis-summary">
+            <div>
+              <span>Detected platform</span>
+              <strong>{metadata.sourcePlatform}</strong>
+            </div>
+            <div>
+              <span>Source duration</span>
+              <strong>{metadata.duration}</strong>
+            </div>
+            <div>
+              <span>Analysis mode</span>
+              <strong>DEMO transcript fallback</strong>
+            </div>
+          </div>
+        )}
+
         <div className="clip-studio-controls">
           <label className="clip-studio-control">
-            <span><Film size={16} />Jumlah Video</span>
+            <span><Film size={16} />Jumlah Clip</span>
             <select data-testid="clip-studio-count" value={clipCount} onChange={(event) => setClipCount(Number(event.target.value))}>
-              {Array.from({ length: MAX_CLIP_COUNT }, (_, index) => index + 1).map((count) => (
-                <option value={count} key={count}>{count}</option>
+              {[1, 3, 5, 10].map((count) => (
+                <option value={count} key={count}>{count} clip</option>
               ))}
             </select>
           </label>
@@ -1980,7 +2055,7 @@ function ClipStudioSourceVideoPanel({
           </div>
 
           <label className="clip-studio-control">
-            <span>Platform Opsional</span>
+            <span>Target Platform</span>
             <select data-testid="clip-studio-platform" value={targetPlatform} onChange={(event) => setTargetPlatform(event.target.value as ClipStudioTargetPlatform)}>
               {clipStudioTargetPlatforms.map((platform) => (
                 <option value={platform} key={platform}>{platform}</option>
@@ -1989,20 +2064,29 @@ function ClipStudioSourceVideoPanel({
           </label>
         </div>
 
-        <button className={`clip-studio-generate-button ${generating ? "generating" : ""}`} data-testid="clip-studio-generate" disabled={!canGenerate} type="button" onClick={handleGenerate}>
-          {generating ? <Loader2 size={18} /> : <Sparkles size={18} />}
-          {generating ? "Generating clips..." : "Generate Clips"}
-        </button>
+        <div className="clip-studio-primary-actions">
+          <button className="secondary-button clip-studio-analyze-button" data-testid="clip-studio-analyze" disabled={!canAnalyze} type="button" onClick={handleAnalyze}>
+            {workflowStatus === "analyzing" ? <Loader2 size={18} /> : <CheckCircle2 size={18} />}
+            Analyze Source
+          </button>
+          <button className={`clip-studio-generate-button ${workflowStatus === "generating" ? "generating" : ""}`} data-testid="clip-studio-generate" disabled={!canGenerate} type="button" onClick={handleGenerate}>
+            {workflowStatus === "generating" ? <Loader2 size={18} /> : <Sparkles size={18} />}
+            Generate Viral Clips
+          </button>
+        </div>
         <div className="clip-studio-notice" role="status">{notice}</div>
       </div>
 
       <section className="clip-studio-preview">
         <div className="clip-studio-preview-heading">
-          <h2>Preview Hasil Generate</h2>
-          <span>{clips.length ? `${clips.length} clip siap review` : "Pilih jumlah video lalu generate"}</span>
+          <div>
+            <h2>Viral Clip Recommendations</h2>
+            <span>{clips.length ? `${clips.length} clip siap review` : "Analyze source, then generate 1, 3, 5, or 10 clips"}</span>
+          </div>
+          {clips.length > 0 && <StatusBadge label="DEMO results" tone="blue" />}
         </div>
         {clips.length ? (
-          <div className="clip-studio-preview-grid">
+          <div className="clip-studio-preview-grid viral-results">
             {clips.map((clip, index) => (
               <article className="clip-studio-preview-card" data-testid="clip-studio-card" key={clip.id}>
                 <div className="clip-studio-thumbnail">
@@ -2011,33 +2095,48 @@ function ClipStudioSourceVideoPanel({
                   <strong>{clip.duration}</strong>
                 </div>
                 <div className="clip-studio-card-body">
-                  <h3>{clip.title}</h3>
-                  <p>{clip.hook}</p>
-                  <small>{clip.angle}</small>
-                  <div className="clip-studio-card-badges">
-                    <span>Viral {clip.viralScore}</span>
-                    <span>{clip.quality}</span>
-                    <span>{clip.status}</span>
+                  <div className="row between gap">
+                    <StatusBadge label={`Viral ${clip.viralScore}`} tone={clip.viralScore >= 90 ? "green" : "blue"} />
+                    <StatusBadge label={clip.status} tone={clip.status === "Ready for Review" ? "amber" : "green"} />
                   </div>
-                  <div className="clip-studio-card-actions">
-                    <button data-testid="clip-studio-action-edit" type="button" onClick={() => handleEdit(clip)}><Edit3 size={14} />Edit</button>
-                    <button data-testid="clip-studio-action-save" type="button" onClick={() => handleSave(clip)}><Save size={14} />Save to Library</button>
+                  <h3>{clip.title}</h3>
+                  <dl className="clip-studio-result-meta">
+                    <div><dt>Start</dt><dd>{clip.startTime}</dd></div>
+                    <div><dt>End</dt><dd>{clip.endTime}</dd></div>
+                    <div><dt>Duration</dt><dd>{clip.duration}</dd></div>
+                    <div><dt>Niche</dt><dd>{clip.category}</dd></div>
+                  </dl>
+                  <p><strong>Hook:</strong> {clip.hook}</p>
+                  <p><strong>Reason:</strong> {clip.reason}</p>
+                  <p><strong>Caption:</strong> {clip.caption}</p>
+                  <div className="tag-cloud compact-tags">
+                    {clip.suggestedHashtags.map((hashtag) => <StatusBadge label={hashtag} tone="cyan" key={hashtag} />)}
+                  </div>
+                  <small><strong>CTA:</strong> {clip.cta}</small>
+                  <div className="clip-studio-card-actions full-actions">
+                    <button data-testid="clip-studio-action-edit" type="button" onClick={() => handleEdit(clip)}><Edit3 size={14} />Send to Clip Editor</button>
+                    <button data-testid="clip-studio-action-subtitle" type="button" onClick={() => handleSubtitle(clip)}><Sparkles size={14} />Generate Subtitle</button>
+                    <button data-testid="clip-studio-action-save" type="button" onClick={() => handleSave(clip)}><Save size={14} />Save to Content Library</button>
                     <button data-testid="clip-studio-action-schedule" type="button" onClick={() => handleSchedule(clip)}><CalendarClock size={14} />Schedule</button>
                   </div>
                 </div>
               </article>
             ))}
           </div>
+        ) : workflowStatus === "error" ? (
+          <div className="clip-studio-empty-preview error-state">Source belum bisa dianalisis. Periksa URL dan durasi, lalu coba Analyze Source lagi.</div>
+        ) : metadata ? (
+          <div className="clip-studio-empty-preview success-state">Source sudah dianalisis. Pilih jumlah clip lalu klik Generate Viral Clips.</div>
         ) : (
-          <div className="clip-studio-empty-preview">Preview akan muncul sesuai jumlah video yang dipilih: 1, 3, 10, atau 15 clip.</div>
+          <div className="clip-studio-empty-preview">Belum ada hasil. Masukkan URL video publik, klik Analyze Source, lalu generate rekomendasi clip viral.</div>
         )}
       </section>
 
       <div className="clip-studio-benefits">
-        <span>Menerima link video sampai 3 jam</span>
-        <span>Generate 1 sampai 15 video</span>
-        <span>Pilihan kualitas mulai 720p</span>
-        <span>Hasil siap ke Editor, Library, dan Scheduler</span>
+        <span>Menerima YouTube, TikTok, Instagram/Reels, dan link video publik</span>
+        <span>Generate 1, 3, 5, atau 10 clip dari satu source</span>
+        <span>Setiap clip punya timing, score, caption, hashtag, dan CTA</span>
+        <span>Hasil siap ke Editor, Subtitle, Library, dan Scheduler</span>
       </div>
     </section>
   );
@@ -2530,6 +2629,13 @@ function InfoPanel({ title, items }: { title: string; items: string[] }) {
   );
 }
 
+function shouldShowConnectedAccountsPanel(activePage: PageId, activeSubKey: string) {
+  if (activePage === "scheduler") {
+    return true;
+  }
+
+  return activePage === "clip-studio" && activeSubKey === "export-center";
+}
 function getRouteFromPath(pathname: string): { page: PageId; path: string } {
   const normalized = normalizePath(pathname);
   const allPaths = navItems.flatMap((item) => [item.path, ...item.submenu.map((sub) => sub.path)]);
