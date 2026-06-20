@@ -1,6 +1,13 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
+import {
+  DEFAULT_CLIP_COUNT,
+  DEFAULT_VIDEO_QUALITY,
+  ClipStudioValidationError,
+  generateClipStudioPlan,
+  validateClipStudioGeneratePayload
+} from "./clip-studio-service";
 import { navItems, opportunities } from "./data/ai-clipper-demo";
 
 const apiCategories = [
@@ -145,20 +152,93 @@ describe("FVN AI Clipper app", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Clip This Video" })[0]);
 
     expect(window.location.pathname).toBe("/clip-studio/source-video");
+    expect(screen.getByTestId("clip-studio-source-video-new")).toBeInTheDocument();
+    expect(screen.getByText("Mendukung durasi hingga 3 jam")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Generate Demo Clips" }));
-    expect(screen.getByText("Hook A")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Generate Clips" }));
+    await waitFor(() => expect(screen.getAllByTestId("clip-studio-card")).toHaveLength(3));
 
-    const saveLibraryButtons = screen.getAllByRole("button", { name: "Save to Library" });
-    fireEvent.click(saveLibraryButtons[1]);
+    const firstClipTitle = screen.getAllByTestId("clip-studio-card")[0].querySelector("h3")?.textContent ?? "";
+    fireEvent.click(screen.getAllByTestId("clip-studio-action-save")[0]);
+    expect(screen.getByText("Saved to Library")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Content Library" }));
-    expect(screen.getByText("Hook A")).toBeInTheDocument();
+    expect(screen.getByText(firstClipTitle)).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Schedule" })[0]);
     fireEvent.click(screen.getByRole("button", { name: "Scheduler" }));
     fireEvent.click(screen.getAllByRole("button", { name: "Content Queue" })[0]);
-    expect(screen.getByText(/Hook A - Scheduled|AI CRM in 30 seconds - Scheduled/)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`${firstClipTitle} - Scheduled|AI CRM in 30 seconds - Scheduled`))).toBeInTheDocument();
+  });
+
+  it("uses the new Clip Studio Source Video UI on the active route", async () => {
+    window.history.pushState({}, "", "/clip-studio/source-video");
+    render(<App />);
+
+    expect(screen.getByTestId("clip-studio-source-video-new")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Paste video URL...")).toBeInTheDocument();
+    expect(screen.getByText("Mendukung durasi hingga 3 jam")).toBeInTheDocument();
+    expect(screen.getByTestId("clip-studio-count")).toHaveValue(String(DEFAULT_CLIP_COUNT));
+    expect(screen.getByTestId("clip-studio-quality-1080p")).toHaveAttribute("aria-pressed", "true");
+
+    for (const label of ["720p HD", "1080p Full HD", "1440p / 2K", "2160p / 4K"]) {
+      expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
+    }
+
+    fireEvent.change(screen.getByTestId("clip-studio-duration"), { target: { value: "180" } });
+    expect(screen.getByRole("button", { name: "Generate Clips" })).toBeEnabled();
+
+    fireEvent.change(screen.getByTestId("clip-studio-duration"), { target: { value: "181" } });
+    expect(screen.getByText("Durasi video maksimal 3 jam.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate Clips" })).toBeDisabled();
+
+    fireEvent.change(screen.getByTestId("clip-studio-duration"), { target: { value: "120" } });
+    fireEvent.change(screen.getByTestId("clip-studio-count"), { target: { value: "15" } });
+    fireEvent.click(screen.getByRole("button", { name: "720p HD" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate Clips" }));
+
+    await waitFor(() => expect(screen.getAllByTestId("clip-studio-card")).toHaveLength(15));
+    expect(screen.getAllByText("720p")).toHaveLength(15);
+
+    fireEvent.click(screen.getAllByTestId("clip-studio-action-edit")[0]);
+    expect(screen.getByText("Ready for Editor")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByTestId("clip-studio-action-save")[0]);
+    expect(screen.getByText("Saved to Library")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByTestId("clip-studio-action-schedule")[0]);
+    expect(screen.getByText("Ready for Schedule")).toBeInTheDocument();
+  });
+
+  it("builds a real-ready Clip Studio generate payload and variable result count", () => {
+    const payload = validateClipStudioGeneratePayload({
+      sourceVideoUrl: "https://www.youtube.com/watch?v=demo",
+      sourceDurationMinutes: 180,
+      clipCount: 10,
+      videoQuality: "2160p",
+      targetPlatform: "Reels"
+    });
+    expect(payload).toMatchObject({
+      sourceVideoUrl: "https://www.youtube.com/watch?v=demo",
+      sourceDurationMinutes: 180,
+      clipCount: 10,
+      videoQuality: "2160p",
+      targetPlatform: "Reels",
+      promptMode: "clip_studio_structured_json",
+      language: "id"
+    });
+
+    const defaultPayload = validateClipStudioGeneratePayload({ sourceVideoUrl: "https://example.com/video" });
+    expect(defaultPayload.clipCount).toBe(DEFAULT_CLIP_COUNT);
+    expect(defaultPayload.videoQuality).toBe(DEFAULT_VIDEO_QUALITY);
+
+    expect(generateClipStudioPlan({ ...payload, clipCount: 1 }).clips).toHaveLength(1);
+    expect(generateClipStudioPlan({ ...payload, clipCount: 15 }).clips).toHaveLength(15);
+    expect(() => generateClipStudioPlan({ ...payload, sourceDurationMinutes: 181 })).toThrow(ClipStudioValidationError);
+
+    const plan = generateClipStudioPlan(payload);
+    expect(plan.prompt).toMatch(/Output wajib JSON terstruktur/i);
+    for (const field of ["id", "title", "thumbnail", "duration", "hook", "angle", "viralScore", "quality", "platform", "status", "sourceVideoUrl"]) {
+      expect(plan.clips[0]).toHaveProperty(field);
+    }
   });
 
   it("loads dashboard overview and opens database top 20 opportunities", async () => {
