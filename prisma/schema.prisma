@@ -1400,20 +1400,43 @@ enum VideoSourceType {
 }
 
 model ContentLibraryItem {
-  id              String           @id @default(cuid())
-  title           String
-  category        String
-  platform        Platform
-  campaign        String           @default("Unassigned")
-  status          ContentStatus    @default(READY)
-  metric          String?
-  date            String?
-  performance     PerformanceLevel @default(MEDIUM)
-  sourceType      SourceType       @default(REAL_API)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  id               String           @id @default(cuid())
+  title            String
+  category         String
+  platform         Platform
+  campaign         String           @default("Unassigned")
+  status           ContentStatus    @default(READY)
+  metric           String?
+  date             String?
+  performance      PerformanceLevel @default(MEDIUM)
+  sourceType       SourceType       @default(REAL_API)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  schedulerEntries SchedulerEntry[]
 
   @@index([platform])
   @@index([status])
   @@index([sourceType])
+}
+
+model SchedulerEntry {
+  id                 String             @id @default(cuid())
+  title              String
+  platform           Platform           @default(ALL)
+  account            String             @default("TikTok A")
+  day                String             @default("Mon")
+  time               String             @default("19:00")
+  scheduledAt        DateTime?
+  status             ContentStatus      @default(SCHEDULED)
+  contentLibraryId   String?
+  sourceType         SourceType         @default(REAL_API)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  contentLibrary     ContentLibraryItem? @relation(fields: [contentLibraryId], references: [id])
+
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([platform])
+  @@index([sourceType])
+  @@index([contentLibraryId])
 }
