@@ -21,6 +21,7 @@ interface ProviderDefaults {
   defaultBaseUrl?: string;
   defaultModel: string;
   requiresBaseUrl?: boolean;
+  providerEnvEnabled?: boolean;
 }
 
 export interface AiClientLike {
@@ -71,7 +72,9 @@ const PROVIDER_DEFAULTS: Record<AiProviderName, ProviderDefaults> = {
     baseUrlEnv: "QWEN_BASE_URL",
     modelEnv: "QWEN_MODEL",
     defaultModel: "qwen-plus",
-    requiresBaseUrl: true
+    requiresBaseUrl: true,
+    // Qwen-specific env is temporarily inactive; use AI_* or AI_FALLBACK_* instead.
+    providerEnvEnabled: false
   }
 };
 
@@ -171,39 +174,43 @@ export async function generateAiText(
 
 function resolveProviderConfig(provider: AiProviderName, role: AiProviderRole, env: ServerEnv): AiProviderResolvedConfig {
   const defaults = PROVIDER_DEFAULTS[provider];
+  const providerEnvEnabled = defaults.providerEnvEnabled !== false;
+  const providerKeyEnv = providerEnvEnabled ? defaults.apiKeyEnv : undefined;
+  const providerModelEnv = providerEnvEnabled ? defaults.modelEnv : undefined;
+  const providerBaseUrlEnv = providerEnvEnabled ? defaults.baseUrlEnv : undefined;
   const keyCandidates: Array<[string, string | undefined]> =
     role === "fallback"
       ? [
           ["AI_FALLBACK_API_KEY", env.AI_FALLBACK_API_KEY],
-          [defaults.apiKeyEnv, env[defaults.apiKeyEnv]],
+          ...envCandidate(providerKeyEnv, env),
           ["AI_API_KEY", env.AI_API_KEY]
         ]
       : [
-          [defaults.apiKeyEnv, env[defaults.apiKeyEnv]],
+          ...envCandidate(providerKeyEnv, env),
           ["AI_API_KEY", env.AI_API_KEY]
         ];
   const modelCandidates: Array<[string, string | undefined]> =
     role === "fallback"
       ? [
           ["AI_FALLBACK_MODEL", env.AI_FALLBACK_MODEL],
-          [defaults.modelEnv, env[defaults.modelEnv]],
+          ...envCandidate(providerModelEnv, env),
           [`${provider} default`, defaults.defaultModel]
         ]
       : [
           ["AI_MODEL", env.AI_MODEL],
-          [defaults.modelEnv, env[defaults.modelEnv]],
+          ...envCandidate(providerModelEnv, env),
           [`${provider} default`, defaults.defaultModel]
         ];
   const baseUrlCandidates: Array<[string, string | undefined]> =
     role === "fallback"
       ? [
           ["AI_FALLBACK_BASE_URL", env.AI_FALLBACK_BASE_URL],
-          [defaults.baseUrlEnv, env[defaults.baseUrlEnv]],
+          ...envCandidate(providerBaseUrlEnv, env),
           [`${provider} default`, defaults.defaultBaseUrl]
         ]
       : [
           ["AI_BASE_URL", env.AI_BASE_URL],
-          [defaults.baseUrlEnv, env[defaults.baseUrlEnv]],
+          ...envCandidate(providerBaseUrlEnv, env),
           [`${provider} default`, defaults.defaultBaseUrl]
         ];
 
@@ -213,15 +220,15 @@ function resolveProviderConfig(provider: AiProviderName, role: AiProviderRole, e
   const missing: string[] = [];
 
   if (!key.value) {
-    missing.push(`${role === "fallback" ? "AI_FALLBACK_API_KEY or " : ""}${defaults.apiKeyEnv} or AI_API_KEY`);
+    missing.push(formatMissingEnv(role === "fallback" ? ["AI_FALLBACK_API_KEY", providerKeyEnv, "AI_API_KEY"] : [providerKeyEnv, "AI_API_KEY"]));
   }
 
   if (!model.value) {
-    missing.push(`${role === "fallback" ? "AI_FALLBACK_MODEL or " : "AI_MODEL or "}${defaults.modelEnv}`);
+    missing.push(formatMissingEnv(role === "fallback" ? ["AI_FALLBACK_MODEL", providerModelEnv] : ["AI_MODEL", providerModelEnv]));
   }
 
   if (defaults.requiresBaseUrl && !baseUrl.value) {
-    missing.push(`${role === "fallback" ? "AI_FALLBACK_BASE_URL or " : "AI_BASE_URL or "}${defaults.baseUrlEnv}`);
+    missing.push(formatMissingEnv(role === "fallback" ? ["AI_FALLBACK_BASE_URL", providerBaseUrlEnv] : ["AI_BASE_URL", providerBaseUrlEnv]));
   }
 
   return {
@@ -281,6 +288,14 @@ function firstValue(candidates: Array<[string, string | undefined]>): { source?:
   }
 
   return {};
+}
+
+function envCandidate(name: string | undefined, env: ServerEnv): Array<[string, string | undefined]> {
+  return name ? [[name, env[name]]] : [];
+}
+
+function formatMissingEnv(names: Array<string | undefined>) {
+  return names.filter(Boolean).join(" or ");
 }
 
 function maskSecret(value?: string) {

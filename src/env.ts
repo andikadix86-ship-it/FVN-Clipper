@@ -64,7 +64,7 @@ export const aiProviderEnvStatus: EnvStatusItem[] = [
   integration("Active AI Provider", ["AI_PROVIDER", "AI_API_KEY", "AI_MODEL"], "Server-side OpenAI-compatible provider used by every AI workflow."),
   integration("OpenAI", ["OPENAI_API_KEY or AI_API_KEY", "OPENAI_MODEL or AI_MODEL"], "Use ChatGPT/OpenAI models through the shared provider adapter."),
   integration("DeepSeek", ["DEEPSEEK_API_KEY or AI_API_KEY", "DEEPSEEK_BASE_URL", "DEEPSEEK_MODEL or AI_MODEL"], "Use DeepSeek through the OpenAI-compatible client."),
-  integration("Qwen", ["QWEN_API_KEY or AI_API_KEY", "QWEN_BASE_URL", "QWEN_MODEL or AI_MODEL"], "Use Qwen through a configured OpenAI-compatible base URL."),
+  integration("Qwen", ["Optional: QWEN_API_KEY", "Optional: QWEN_BASE_URL", "Optional: QWEN_MODEL"], "Qwen-specific env is temporarily inactive. Use AI_* or AI_FALLBACK_* if selecting Qwen."),
   integration("Fallback Provider", ["AI_FALLBACK_PROVIDER", "AI_FALLBACK_API_KEY", "AI_FALLBACK_MODEL"], "Optional provider retried when the primary provider fails.")
 ];
 

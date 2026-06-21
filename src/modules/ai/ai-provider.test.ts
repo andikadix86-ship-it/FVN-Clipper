@@ -25,6 +25,43 @@ describe("AI provider abstraction", () => {
     expect(status.fallback).toMatchObject({ provider: "qwen", configured: true, model: "qwen-plus" });
   });
 
+  it("ignores Qwen-specific env while keeping Qwen configurable through generic AI env", () => {
+    const status = getAiProviderPublicStatus({
+      AI_PROVIDER: "qwen",
+      AI_API_KEY: primaryKey,
+      AI_BASE_URL: "https://generic-ai.example/v1",
+      AI_MODEL: "qwen-generic",
+      QWEN_API_KEY: "qwen-disabled-12345678901234567890",
+      QWEN_BASE_URL: "https://qwen-disabled.example/v1",
+      QWEN_MODEL: "qwen-disabled"
+    });
+
+    expect(status.primary).toMatchObject({
+      provider: "qwen",
+      configured: true,
+      keySource: "AI_API_KEY",
+      baseUrl: "https://generic-ai.example/v1",
+      baseUrlSource: "AI_BASE_URL",
+      model: "qwen-generic",
+      modelSource: "AI_MODEL"
+    });
+  });
+
+  it("does not treat Qwen-specific env as enough to configure Qwen", () => {
+    const status = getAiProviderPublicStatus({
+      AI_PROVIDER: "qwen",
+      QWEN_API_KEY: "qwen-disabled-12345678901234567890",
+      QWEN_BASE_URL: "https://qwen-disabled.example/v1",
+      QWEN_MODEL: "qwen-disabled"
+    });
+
+    expect(status.primary.configured).toBe(false);
+    expect(status.primary.keySource).toBeUndefined();
+    expect(status.primary.baseUrl).toBeUndefined();
+    expect(status.primary.modelSource).toBe("qwen default");
+    expect(status.primary.missing).toEqual(["AI_API_KEY", "AI_BASE_URL"]);
+  });
+
   it("falls back to the secondary provider when the primary request fails", async () => {
     const settings = resolveAiProviderSettings({
       AI_PROVIDER: "openai",

@@ -29,16 +29,16 @@ Provider-specific variables are also supported:
 
 - `OPENAI_API_KEY`, `OPENAI_MODEL`
 - `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`, `DEEPSEEK_MODEL`
-- `QWEN_API_KEY`, `QWEN_BASE_URL`, `QWEN_MODEL`
+- `QWEN_API_KEY`, `QWEN_BASE_URL`, `QWEN_MODEL` are optional and temporarily ignored. Keep them empty for now.
 
 Resolution rules:
 
 - `AI_PROVIDER=openai` uses `OPENAI_API_KEY` or `AI_API_KEY`.
 - `AI_PROVIDER=deepseek` uses `DEEPSEEK_API_KEY` or `AI_API_KEY`.
-- `AI_PROVIDER=qwen` uses `QWEN_API_KEY` or `AI_API_KEY`.
+- `AI_PROVIDER=qwen` uses generic `AI_API_KEY`, `AI_BASE_URL`, and `AI_MODEL` while Qwen-specific env is inactive.
 - `AI_BASE_URL` overrides provider base URL for the primary provider.
 - `AI_MODEL` overrides provider model for the primary provider.
-- If the primary provider request fails, the server retries the fallback provider when fallback env is configured.
+- If the primary provider request fails, the server retries the fallback provider when `AI_FALLBACK_PROVIDER`, `AI_FALLBACK_API_KEY`, `AI_FALLBACK_BASE_URL`, and `AI_FALLBACK_MODEL` are configured.
 - If no configured provider succeeds, API routes return a JSON error with a user-friendly message instead of crashing the UI.
 
 These are server-side secrets. Do not expose them in client-side code. Settings displays only provider status and masked keys.
