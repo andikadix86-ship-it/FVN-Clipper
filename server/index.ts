@@ -37,6 +37,35 @@ server.listen(PORT, "127.0.0.1", () => {
   console.log(`FVN API server listening on http://127.0.0.1:${PORT}`);
 });
 
+async function generateUniqueSlug(name: string, currentId?: string): Promise<string> {
+  const baseSlug = name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  let slug = baseSlug || "campaign";
+  let count = 1;
+
+  while (true) {
+    const existing = await prisma.campaign.findFirst({
+      where: {
+        slug,
+        ...(currentId ? { id: { not: currentId } } : {})
+      }
+    });
+
+    if (!existing) {
+      break;
+    }
+
+    count++;
+    slug = `${baseSlug}-${count}`;
+  }
+
+  return slug;
+}
+
 async function routeRequest(request: IncomingMessage, response: ServerResponse) {
   const method = request.method ?? "GET";
   const requestUrl = new URL(request.url ?? "/", `http://${request.headers.host ?? `127.0.0.1:${PORT}`}`);
@@ -429,6 +458,157 @@ async function routeRequest(request: IncomingMessage, response: ServerResponse) 
 
     sendData(response, archived);
     return;
+  }
+
+  // ─── Campaigns ──────────────────────────────────────────────────────────────
+
+  if (method === "GET" && pathname === "/api/campaigns") {
+    const statusFilter = requestUrl.searchParams.get("status");
+    const platformFilter = requestUrl.searchParams.get("platform");
+
+    const where: Record<string, unknown> = {
+      sourceType: { not: "DEMO" }
+    };
+    if (statusFilter && validStatuses.includes(statusFilter)) {
+      where.status = statusFilter;
+    } else {
+      where.status = { not: "ARCHIVED" };
+    }
+    if (platformFilter && validPlatforms.includes(platformFilter)) {
+      where.platform = platformFilter;
+    }
+
+    const campaigns = await prisma.campaign.findMany({
+      where,
+      orderBy: [{ status: "asc" }, { updatedAt: "desc" }]
+    });
+
+    sendData(response, campaigns);
+    return;
+  }
+
+  if (method === "POST" && pathname === "/api/campaigns") {
+    const body = await readJsonBody(request);
+    const { name, platform, description, status, sourceType, categoryId, startDate, endDate } = body;
+
+    if (typeof name !== "string" || !name.trim()) {
+      sendJson(response, { success: false, error: "name is required" }, 400);
+      return;
+    }
+
+    const finalPlatform = platform !== undefined ? platform : "ALL";
+    if (!validPlatforms.includes(finalPlatform as string)) {
+      sendJson(response, { success: false, error: `platform must be one of: ${validPlatforms.join(", ")}` }, 400);
+      return;
+    }
+
+    if (status !== undefined && !validStatuses.includes(status as string)) {
+      sendJson(response, { success: false, error: `status must be one of: ${validStatuses.join(", ")}` }, 400);
+      return;
+    }
+
+    const finalSourceType = sourceType !== undefined ? sourceType : "REAL_API";
+    if (!validSourceTypes.includes(finalSourceType as string)) {
+      sendJson(response, { success: false, error: `sourceType must be one of: ${validSourceTypes.join(", ")}` }, 400);
+      return;
+    }
+
+    const slug = await generateUniqueSlug(name);
+
+    const newCampaign = await prisma.campaign.create({
+      data: {
+        name: name.trim(),
+        slug,
+        platform: finalPlatform as any,
+        status: (status as any) || "DRAFT",
+        sourceType: finalSourceType as any,
+        description: typeof description === "string" ? description.trim() : null,
+        categoryId: typeof categoryId === "string" ? categoryId : null,
+        startDate: typeof startDate === "string" && startDate ? new Date(startDate) : null,
+        endDate: typeof endDate === "string" && endDate ? new Date(endDate) : null
+      }
+    });
+
+    sendData(response, newCampaign);
+    return;
+  }
+
+  const campaignMatch = pathname.match(/^\/api\/campaigns\/([^/]+)$/);
+  if (campaignMatch) {
+    const id = decodeURIComponent(campaignMatch[1]);
+
+    if (method === "PATCH") {
+      const body = await readJsonBody(request);
+      const { name, platform, description, status, sourceType, categoryId, startDate, endDate } = body;
+
+      const existing = await prisma.campaign.findUnique({ where: { id } });
+      if (!existing) {
+        sendJson(response, { success: false, error: "Campaign not found" }, 404);
+        return;
+      }
+
+      if (name !== undefined && (typeof name !== "string" || !(name as string).trim())) {
+        sendJson(response, { success: false, error: "name cannot be empty" }, 400);
+        return;
+      }
+
+      if (platform !== undefined && !validPlatforms.includes(platform as string)) {
+        sendJson(response, { success: false, error: `platform must be one of: ${validPlatforms.join(", ")}` }, 400);
+        return;
+      }
+
+      if (status !== undefined && !validStatuses.includes(status as string)) {
+        sendJson(response, { success: false, error: `status must be one of: ${validStatuses.join(", ")}` }, 400);
+        return;
+      }
+
+      if (sourceType !== undefined && !validSourceTypes.includes(sourceType as string)) {
+        sendJson(response, { success: false, error: `sourceType must be one of: ${validSourceTypes.join(", ")}` }, 400);
+        return;
+      }
+
+      const updatedData: Record<string, any> = {};
+
+      if (name !== undefined) {
+        const trimmedName = (name as string).trim();
+        updatedData.name = trimmedName;
+        if (trimmedName !== existing.name) {
+          updatedData.slug = await generateUniqueSlug(trimmedName, id);
+        }
+      }
+
+      if (platform !== undefined) updatedData.platform = platform;
+      if (status !== undefined) updatedData.status = status;
+      if (sourceType !== undefined) updatedData.sourceType = sourceType;
+      if (description !== undefined) updatedData.description = typeof description === "string" ? description.trim() : null;
+      if (categoryId !== undefined) updatedData.categoryId = typeof categoryId === "string" ? categoryId : null;
+      if (startDate !== undefined) updatedData.startDate = typeof startDate === "string" && startDate ? new Date(startDate) : null;
+      if (endDate !== undefined) updatedData.endDate = typeof endDate === "string" && endDate ? new Date(endDate) : null;
+
+      const updatedCampaign = await prisma.campaign.update({
+        where: { id },
+        data: updatedData
+      });
+
+      sendData(response, updatedCampaign);
+      return;
+    }
+
+    if (method === "DELETE") {
+      const existing = await prisma.campaign.findUnique({ where: { id } });
+      if (!existing) {
+        sendJson(response, { success: false, error: "Campaign not found" }, 404);
+        return;
+      }
+
+      const archived = await prisma.campaign.update({
+        where: { id },
+        data: { status: "ARCHIVED" }
+      });
+
+      sendData(response, archived);
+      return;
+    }
   }
 
   sendJson(response, { success: false, data: null, error: "API endpoint not found" }, 404);
