@@ -54,7 +54,9 @@ import {
   type DashboardOverviewData,
   type OpportunityQuery,
   type ApiContentLibraryItem,
-  mapContentLibraryItem
+  mapContentLibraryItem,
+  type ApiSchedulerEntry,
+  mapSchedulerEntry
 } from "./api";
 import {
   DEFAULT_CLIP_COUNT,
@@ -119,7 +121,8 @@ export function App() {
   const contentLibraryState = useApiResource<ApiContentLibraryItem[]>("/api/content-library", true);
   const contentLibrary = useMemo(() => (contentLibraryState.data ?? []).map(mapContentLibraryItem), [contentLibraryState.data]);
   const [campaignList, setCampaignList] = usePersistentState<Campaign[]>(CAMPAIGNS_KEY, []);
-  const [scheduleList, setScheduleList] = usePersistentState<ScheduleItem[]>(SCHEDULES_KEY, []);
+  const schedulerState = useApiResource<ApiSchedulerEntry[]>("/api/scheduler", true);
+  const scheduleList = useMemo(() => (schedulerState.data ?? []).map(mapSchedulerEntry), [schedulerState.data]);
   const [accountList, setAccountList] = usePersistentState<Account[]>(ACCOUNTS_KEY, []);
   const [approvalStatus, setApprovalStatus] = usePersistentState<"Pending" | "Approved" | "Rejected">(APPROVAL_STATUS_KEY, "Pending");
   const [opportunityList, setOpportunityList] = useState<VideoOpportunity[]>([]);
@@ -184,6 +187,61 @@ export function App() {
       migrateLocalItems();
     }
   }, [contentLibraryState.data]);
+
+  useEffect(() => {
+    const migrateSchedules = async () => {
+      try {
+        const stored = localStorage.getItem(SCHEDULES_KEY);
+        if (!stored) return;
+        const localSchedules = JSON.parse(stored) as ScheduleItem[];
+        if (localSchedules.length === 0) {
+          localStorage.removeItem(SCHEDULES_KEY);
+          return;
+        }
+
+        console.log(`[FVN migrate] Migrating ${localSchedules.length} schedules to database.`);
+        const failedItems: ScheduleItem[] = [];
+        let lastErrorMsg = "";
+
+        for (const item of localSchedules) {
+          try {
+            await fetchApiData<ApiSchedulerEntry>("/api/scheduler", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                title: item.title,
+                platform: toApiPlatform(item.platform) || "ALL",
+                account: item.account || "TikTok A",
+                day: item.day || "Mon",
+                time: item.time || "19:00",
+                status: "SCHEDULED"
+              })
+            });
+          } catch (err) {
+            console.error("[FVN migrate scheduler item error]", item, err);
+            failedItems.push(item);
+            lastErrorMsg = err instanceof Error ? err.message : String(err);
+          }
+        }
+
+        if (failedItems.length > 0) {
+          localStorage.setItem(SCHEDULES_KEY, JSON.stringify(failedItems));
+          showToast(`Migrasi gagal sebagian: ${failedItems.length} item gagal dipindahkan. Error: ${lastErrorMsg}`);
+        } else {
+          localStorage.removeItem(SCHEDULES_KEY);
+          showToast("Migrated local schedules to database successfully.");
+        }
+        schedulerState.reload();
+      } catch (error) {
+        console.error("[FVN migrate scheduler error]", error);
+        showToast(`Migrasi scheduler error: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    };
+
+    if (schedulerState.data) {
+      migrateSchedules();
+    }
+  }, [schedulerState.data]);
 
   const showToast = (message: string) => {
     console.log(`[FVN action] ${message}`);
@@ -331,34 +389,51 @@ export function App() {
   };
 
   const scheduleContent = async (item: ContentItem) => {
-    const schedule: ScheduleItem = {
-      id: `schedule-${Date.now()}`,
+    if (!item.id) {
+      showToast(`Scheduled (Local): ${item.title}`);
+      return;
+    }
+
+    const isAlreadyScheduled = (schedulerState.data ?? []).some(
+      (entry) => entry.contentLibraryId === item.id && entry.status !== "ARCHIVED"
+    );
+
+    if (isAlreadyScheduled) {
+      showToast(`Konten "${item.title}" sudah dijadwalkan sebelumnya.`);
+      return;
+    }
+
+    const schedule = {
       title: item.title,
       account: "TikTok A",
-      platform: item.platform,
+      platform: toApiPlatform(item.platform) || "ALL",
       day: "Thu",
       time: "19:00",
-      status: "Scheduled"
+      status: "SCHEDULED",
+      contentLibraryId: item.id
     };
-    setScheduleList((current) => [schedule, ...current]);
 
-    if (item.id) {
-      try {
-        await fetchApiData<ApiContentLibraryItem>(`/api/content-library/${item.id}`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            status: "SCHEDULED",
-            metric: `${schedule.day} ${schedule.time}`
-          })
-        });
-        contentLibraryState.reload();
-        showToast(`Scheduled ${item.title}`);
-      } catch (error) {
-        showToast(error instanceof Error ? error.message : "Failed to schedule content");
-      }
-    } else {
-      showToast(`Scheduled (Local): ${item.title}`);
+    try {
+      await fetchApiData<ApiSchedulerEntry>("/api/scheduler", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(schedule)
+      });
+
+      await fetchApiData<ApiContentLibraryItem>(`/api/content-library/${item.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          status: "SCHEDULED",
+          metric: `${schedule.day} ${schedule.time}`
+        })
+      });
+
+      contentLibraryState.reload();
+      schedulerState.reload();
+      showToast(`Scheduled ${item.title}`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to schedule content");
     }
   };
 
@@ -483,6 +558,8 @@ export function App() {
               lastScanned={lastScanned}
               opportunityList={opportunityList}
               scanSummary={scanSummary}
+              schedulerLoading={schedulerState.loading}
+              schedulerError={schedulerState.error}
             />
           </section>
           {shouldShowConnectedAccountsPanel(activePage, activeSub.key) && <RightPanel accounts={accountList} />}
@@ -537,7 +614,9 @@ function PageRouter({
   isScanning,
   lastScanned,
   opportunityList,
-  scanSummary
+  scanSummary,
+  schedulerLoading,
+  schedulerError
 }: {
   activePage: PageId;
   activeSub: SubNavItem;
@@ -568,6 +647,8 @@ function PageRouter({
   lastScanned: string;
   opportunityList: VideoOpportunity[];
   scanSummary: string[];
+  schedulerLoading?: boolean;
+  schedulerError?: string | null;
 }) {
   switch (activePage) {
     case "ai-clip-intelligence":
@@ -603,7 +684,20 @@ function PageRouter({
     case "content-library":
       return <ContentLibrary activeSub={activeSub} contentItems={contentLibrary} onArchiveContent={onArchiveContent} onScheduleContent={onScheduleContent} />;
     case "scheduler":
-      return <Scheduler activeSub={activeSub} accounts={accountList} approvalStatus={approvalStatus} schedules={scheduleList} onOpenAddAccount={onOpenAddAccount} onRefreshAccount={onRefreshAccount} onToggleAccount={onToggleAccount} onUpdateApproval={onUpdateApproval} />;
+      return (
+        <Scheduler
+          activeSub={activeSub}
+          accounts={accountList}
+          approvalStatus={approvalStatus}
+          schedules={scheduleList}
+          onOpenAddAccount={onOpenAddAccount}
+          onRefreshAccount={onRefreshAccount}
+          onToggleAccount={onToggleAccount}
+          onUpdateApproval={onUpdateApproval}
+          loading={schedulerLoading}
+          error={schedulerError}
+        />
+      );
     case "analytics":
       return <Analytics activeSub={activeSub} contentCount={contentLibrary.length} scheduleCount={scheduleList.length} />;
     case "settings":
@@ -1159,7 +1253,9 @@ function Scheduler({
   onOpenAddAccount,
   onRefreshAccount,
   onToggleAccount,
-  onUpdateApproval
+  onUpdateApproval,
+  loading,
+  error
 }: {
   activeSub: SubNavItem;
   accounts: Account[];
@@ -1169,6 +1265,8 @@ function Scheduler({
   onRefreshAccount: (account: Account) => void;
   onToggleAccount: (account: Account) => void;
   onUpdateApproval: (status: "Pending" | "Approved" | "Rejected") => void;
+  loading?: boolean;
+  error?: string | null;
 }) {
   return (
     <>
@@ -1178,7 +1276,17 @@ function Scheduler({
         description="Manage connected accounts, queue status, calendar views, auto posting, approvals, and logs."
         actions={<button className="primary-button" type="button" onClick={onOpenAddAccount}>Add Account</button>}
       />
-      <SchedulerContent activeSub={activeSub} accounts={accounts} approvalStatus={approvalStatus} schedules={schedules} onOpenAddAccount={onOpenAddAccount} onRefreshAccount={onRefreshAccount} onToggleAccount={onToggleAccount} onUpdateApproval={onUpdateApproval} />
+      {loading ? (
+        <div className="dashboard-skeleton">
+          <span />
+          <span />
+          <span />
+        </div>
+      ) : error ? (
+        <EmptyState title="Unable to load scheduler data" description={error} />
+      ) : (
+        <SchedulerContent activeSub={activeSub} accounts={accounts} approvalStatus={approvalStatus} schedules={schedules} onOpenAddAccount={onOpenAddAccount} onRefreshAccount={onRefreshAccount} onToggleAccount={onToggleAccount} onUpdateApproval={onUpdateApproval} />
+      )}
     </>
   );
 }

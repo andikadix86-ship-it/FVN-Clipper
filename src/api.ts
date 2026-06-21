@@ -117,6 +117,22 @@ export interface ApiContentLibraryItem {
   sourceType: SourceType;
 }
 
+export interface ApiSchedulerEntry {
+  id: string;
+  title: string;
+  platform: ApiPlatform;
+  account: string;
+  day: string;
+  time: string;
+  scheduledAt?: string | null;
+  status: ApiStatus;
+  contentLibraryId?: string | null;
+  sourceType: SourceType;
+  createdAt?: string;
+  updatedAt?: string;
+  contentLibrary?: ApiContentLibraryItem | null;
+}
+
 export interface ApiAiProviderConfig {
   role: "primary" | "fallback";
   provider: "openai" | "deepseek" | "qwen";
@@ -338,6 +354,34 @@ export function mapContentLibraryItem(item: ApiContentLibraryItem): ContentItem 
     metric: item.metric ?? "",
     date: item.date ?? undefined,
     performance: performanceMap[item.performance] ?? "Medium"
+  };
+}
+
+export function mapSchedulerEntry(item: ApiSchedulerEntry): ScheduleItem {
+  const statusMap: Record<ApiStatus, ScheduleItem["status"]> = {
+    DRAFT: "Draft",
+    READY: "Ready",
+    SCHEDULED: "Scheduled",
+    PUBLISHED: "Published",
+    FAILED: "Failed",
+    PAUSED: "Paused",
+    ARCHIVED: "Draft",
+    REVIEW: "Draft",
+    APPROVED: "Draft",
+    REJECTED: "Draft",
+    POSTED: "Published"
+  };
+
+  return {
+    id: item.id,
+    title: item.title,
+    account: item.account,
+    platform: formatEnumLabel(item.platform),
+    day: item.day,
+    time: item.time,
+    status: statusMap[item.status] ?? "Scheduled",
+    scheduledAt: item.scheduledAt ?? undefined,
+    sourceType: item.sourceType
   };
 }
 
