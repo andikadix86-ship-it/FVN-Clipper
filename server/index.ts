@@ -1,12 +1,15 @@
+import "dotenv/config";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { loadEnvFile } from "node:process";
+import { existsSync } from "node:fs";
 import { fileURLToPath, URL } from "node:url";
+import { config as loadDotenv } from "dotenv";
 import { getHttpStatus, sanitizeSecret, toApiErrorPayload } from "../src/modules/http/api-error";
 
-try {
-  loadEnvFile(fileURLToPath(new URL("../.env", import.meta.url)));
-} catch (error) {
-  console.warn(`[FVN API env] ENV belum terbaca dari project root: ${sanitizeSecret(error instanceof Error ? error.message : "unknown error")}`);
+const PROJECT_ENV_PATH = fileURLToPath(new URL("../.env", import.meta.url));
+const envLoadResult = loadDotenv({ path: PROJECT_ENV_PATH, override: true, quiet: true });
+
+if (envLoadResult.error && !existsSync(PROJECT_ENV_PATH)) {
+  console.warn(`[FVN API env] ENV belum terbaca dari project root: ${sanitizeSecret(envLoadResult.error.message)}`);
 }
 
 const { getCategories, getCompetitors, getOpportunities, setOpportunitySaved } = await import("../src/modules/ai-clip-intelligence/ai-clip-service");
@@ -16,6 +19,8 @@ const { getConnectionStatus } = await import("../src/modules/connections/connect
 const { getDashboardCampaigns, getDashboardOverview, getDashboardRecommendations, getPublishingCalendar } = await import("../src/modules/dashboard/dashboard-service");
 
 const PORT = Number(process.env.API_PORT ?? 3001);
+
+logSafeEnvStatus();
 
 type JsonBody = Record<string, unknown>;
 
@@ -186,4 +191,12 @@ async function readJsonBody(request: IncomingMessage): Promise<JsonBody> {
   } catch {
     return {};
   }
+}
+
+function logSafeEnvStatus() {
+  const envStatus = ["DATABASE_URL", "AI_API_KEY", "YOUTUBE_API_KEY"]
+    .map((key) => `${key}=${process.env[key]?.trim() ? "present" : "missing"}`)
+    .join(" ");
+
+  console.log(`[FVN API env] ENV loaded: ${envStatus}`);
 }
