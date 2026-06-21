@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath, URL } from "node:url";
 import { config as loadDotenv } from "dotenv";
 import { getHttpStatus, sanitizeSecret, toApiErrorPayload } from "../src/modules/http/api-error";
+import { prisma } from "../src/modules/db/prisma";
 
 const PROJECT_ENV_PATH = fileURLToPath(new URL("../.env", import.meta.url));
 const envLoadResult = loadDotenv({ path: PROJECT_ENV_PATH, override: true, quiet: true });
@@ -145,6 +146,142 @@ async function routeRequest(request: IncomingMessage, response: ServerResponse) 
         niche: requestUrl.searchParams.get("niche")
       })
     );
+    return;
+  }
+
+  const validPlatforms = ["YOUTUBE", "TIKTOK", "INSTAGRAM", "ALL", "FACEBOOK"];
+  const validStatuses = ["DRAFT", "READY", "SCHEDULED", "POSTED", "FAILED", "REVIEW", "APPROVED", "REJECTED", "PUBLISHED", "PAUSED", "ARCHIVED"];
+  const validPerformances = ["HIGH", "MEDIUM", "LOW"];
+  const validSourceTypes = ["DEMO", "MANUAL", "CSV_IMPORT", "REAL_API"];
+
+  if (method === "GET" && pathname === "/api/content-library") {
+    const items = await prisma.contentLibraryItem.findMany({
+      orderBy: { createdAt: "desc" }
+    });
+    sendData(response, items);
+    return;
+  }
+
+  if (method === "POST" && pathname === "/api/content-library") {
+    const body = await readJsonBody(request);
+    const { title, category, platform, campaign, status, metric, date, performance, sourceType } = body;
+
+    if (typeof title !== "string" || !title.trim()) {
+      sendJson(response, { success: false, error: "title is required" }, 400);
+      return;
+    }
+    if (typeof category !== "string" || !category.trim()) {
+      sendJson(response, { success: false, error: "category is required" }, 400);
+      return;
+    }
+    if (typeof platform !== "string" || !platform.trim() || !validPlatforms.includes(platform)) {
+      sendJson(response, { success: false, error: `platform is required and must be one of: ${validPlatforms.join(", ")}` }, 400);
+      return;
+    }
+    if (status !== undefined && (!validStatuses.includes(status as string))) {
+      sendJson(response, { success: false, error: `status must be one of: ${validStatuses.join(", ")}` }, 400);
+      return;
+    }
+    if (performance !== undefined && (!validPerformances.includes(performance as string))) {
+      sendJson(response, { success: false, error: `performance must be one of: ${validPerformances.join(", ")}` }, 400);
+      return;
+    }
+    if (sourceType !== undefined && (!validSourceTypes.includes(sourceType as string))) {
+      sendJson(response, { success: false, error: `sourceType must be one of: ${validSourceTypes.join(", ")}` }, 400);
+      return;
+    }
+
+    const newItem = await prisma.contentLibraryItem.create({
+      data: {
+        title: title.trim(),
+        category: category.trim(),
+        platform: platform as any,
+        campaign: typeof campaign === "string" && campaign.trim() ? campaign.trim() : "Unassigned",
+        status: (status as any) ?? "READY",
+        metric: typeof metric === "string" ? metric : null,
+        date: typeof date === "string" ? date : null,
+        performance: (performance as any) ?? "MEDIUM",
+        sourceType: (sourceType as any) ?? "REAL_API"
+      }
+    });
+
+    sendData(response, newItem);
+    return;
+  }
+
+  const patchMatch = pathname.match(/^\/api\/content-library\/([^/]+)$/);
+  if (method === "PATCH" && patchMatch) {
+    const id = decodeURIComponent(patchMatch[1]);
+    const body = await readJsonBody(request);
+    const { title, category, platform, campaign, status, metric, date, performance, sourceType } = body;
+
+    if (title !== undefined && (typeof title !== "string" || !(title as string).trim())) {
+      sendJson(response, { success: false, error: "title cannot be empty" }, 400);
+      return;
+    }
+    if (category !== undefined && (typeof category !== "string" || !(category as string).trim())) {
+      sendJson(response, { success: false, error: "category cannot be empty" }, 400);
+      return;
+    }
+    if (platform !== undefined && (!validPlatforms.includes(platform as string))) {
+      sendJson(response, { success: false, error: `platform must be one of: ${validPlatforms.join(", ")}` }, 400);
+      return;
+    }
+    if (status !== undefined && (!validStatuses.includes(status as string))) {
+      sendJson(response, { success: false, error: `status must be one of: ${validStatuses.join(", ")}` }, 400);
+      return;
+    }
+    if (performance !== undefined && (!validPerformances.includes(performance as string))) {
+      sendJson(response, { success: false, error: `performance must be one of: ${validPerformances.join(", ")}` }, 400);
+      return;
+    }
+    if (sourceType !== undefined && (!validSourceTypes.includes(sourceType as string))) {
+      sendJson(response, { success: false, error: `sourceType must be one of: ${validSourceTypes.join(", ")}` }, 400);
+      return;
+    }
+
+    const existing = await prisma.contentLibraryItem.findUnique({ where: { id } });
+    if (!existing) {
+      sendJson(response, { success: false, error: "ContentLibraryItem not found" }, 404);
+      return;
+    }
+
+    const updatedData: any = {};
+    if (title !== undefined) updatedData.title = (title as string).trim();
+    if (category !== undefined) updatedData.category = (category as string).trim();
+    if (platform !== undefined) updatedData.platform = platform;
+    if (campaign !== undefined) updatedData.campaign = typeof campaign === "string" ? campaign.trim() : "Unassigned";
+    if (status !== undefined) updatedData.status = status;
+    if (metric !== undefined) updatedData.metric = typeof metric === "string" ? metric : null;
+    if (date !== undefined) updatedData.date = typeof date === "string" ? date : null;
+    if (performance !== undefined) updatedData.performance = performance;
+    if (sourceType !== undefined) updatedData.sourceType = sourceType;
+
+    const updatedItem = await prisma.contentLibraryItem.update({
+      where: { id },
+      data: updatedData
+    });
+
+    sendData(response, updatedItem);
+    return;
+  }
+
+  const deleteMatch = pathname.match(/^\/api\/content-library\/([^/]+)$/);
+  if (method === "DELETE" && deleteMatch) {
+    const id = decodeURIComponent(deleteMatch[1]);
+
+    const existing = await prisma.contentLibraryItem.findUnique({ where: { id } });
+    if (!existing) {
+      sendJson(response, { success: false, error: "ContentLibraryItem not found" }, 404);
+      return;
+    }
+
+    const archivedItem = await prisma.contentLibraryItem.update({
+      where: { id },
+      data: { status: "ARCHIVED" }
+    });
+
+    sendData(response, archivedItem);
     return;
   }
 

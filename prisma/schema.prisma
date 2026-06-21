@@ -6,60 +6,6 @@ datasource db {
   provider = "postgresql"
 }
 
-enum SourceType {
-  DEMO
-  MANUAL
-  CSV_IMPORT
-  REAL_API
-}
-
-enum Platform {
-  ALL
-  YOUTUBE
-  TIKTOK
-  INSTAGRAM
-  FACEBOOK
-}
-
-enum ContentStatus {
-  DRAFT
-  READY
-  SCHEDULED
-  PUBLISHED
-  FAILED
-  PAUSED
-}
-
-enum PerformanceLevel {
-  HIGH
-  MEDIUM
-  LOW
-}
-
-enum PriorityLevel {
-  HIGH
-  MEDIUM
-  LOW
-}
-
-enum RecommendationType {
-  NICHE
-  CAMPAIGN
-  CONTENT
-  PUBLISHING
-  WARNING
-  GROWTH
-}
-
-enum PublishingContentType {
-  CLIP
-  IMAGE
-  STORY
-  SHORTS
-  REELS
-  POST
-}
-
 model Category {
   id            String              @id @default(cuid())
   name          String
@@ -69,8 +15,8 @@ model Category {
   sourceType    SourceType          @default(REAL_API)
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
-  campaigns     Campaign[]
   opportunities AiClipOpportunity[]
+  campaigns     Campaign[]
 
   @@index([isActive])
   @@index([sourceType])
@@ -89,8 +35,8 @@ model Campaign {
   sourceType          SourceType           @default(REAL_API)
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
-  category            Category?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   opportunities       AiClipOpportunity[]
+  category            Category?            @relation(fields: [categoryId], references: [id])
   publishingSchedules PublishingSchedule[]
 
   @@index([categoryId])
@@ -125,8 +71,8 @@ model AiClipOpportunity {
   campaignId          String?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
-  category            Category?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  campaign            Campaign?            @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  campaign            Campaign?            @relation(fields: [campaignId], references: [id])
+  category            Category?            @relation(fields: [categoryId], references: [id])
   publishingSchedules PublishingSchedule[]
 
   @@index([categoryId])
@@ -173,8 +119,8 @@ model PublishingSchedule {
   sourceType    SourceType            @default(REAL_API)
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
-  campaign      Campaign?             @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  opportunity   AiClipOpportunity?    @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  campaign      Campaign?             @relation(fields: [campaignId], references: [id])
+  opportunity   AiClipOpportunity?    @relation(fields: [opportunityId], references: [id])
 
   @@index([campaignId])
   @@index([opportunityId])
@@ -203,5 +149,1271 @@ model CompetitorProfile {
 
   @@index([platform])
   @@index([niche])
+  @@index([sourceType])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model AIAgent {
+  id                  String                @id
+  name                String
+  role                AgentRole
+  description         String
+  status              AgentStatus           @default(ACTIVE)
+  lastRunAt           DateTime?
+  totalTasks          Int                   @default(0)
+  successRate         Float                 @default(96)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime
+  AgentRecommendation AgentRecommendation[]
+  AgentTask           AgentTask[]
+  AutomationPlan      AutomationPlan[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model AIProvider {
+  id                 String               @id
+  name               AIProviderName       @unique
+  apiKey             String?
+  status             ProviderStatus       @default(NOT_CONNECTED)
+  dailyLimit         Int                  @default(0)
+  usedToday          Int                  @default(0)
+  resetTime          String               @default("00:00")
+  isActive           Boolean              @default(false)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime
+  mode               ProviderMode         @default(DUMMY)
+  lastTestAt         DateTime?
+  lastTestError      String?
+  lastTestStatus     AIProviderStatus?
+  providerStatus     AIProviderStatus     @default(NOT_CONFIGURED)
+  GenerationJob      GenerationJob[]
+  ProviderCredential ProviderCredential[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model AffiliateAccount {
+  id                    String            @id
+  programId             String?
+  platform              String
+  accountName           String
+  handle                String
+  niche                 String
+  role                  String
+  affiliateDashboardUrl String?
+  affiliateLink         String?
+  commissionInfo        String            @default("")
+  notes                 String            @default("")
+  status                String            @default("ACTIVE")
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime
+  AffiliateProgram      AffiliateProgram? @relation(fields: [programId], references: [id])
+  CampaignAccount       CampaignAccount[]
+
+  @@index([platform, status])
+  @@index([programId, updatedAt])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model AffiliateCampaign {
+  id                    String             @id
+  campaignName          String
+  productName           String
+  platform              String
+  category              String
+  trendScore            Int
+  competitionLevel      String
+  commissionEstimate    String
+  priceRange            String
+  contentPotentialScore Int
+  source                String
+  sourceUrl             String?
+  notes                 String             @default("")
+  isDemo                Boolean            @default(true)
+  status                String             @default("draft")
+  metadata              Json?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime
+  CampaignAccount       CampaignAccount[]
+  GeneratedContent      GeneratedContent[]
+
+  @@index([platform, createdAt])
+  @@index([status, createdAt])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model AffiliateProductInsight {
+  id                    String    @id
+  productName           String
+  platform              String
+  category              String
+  trendScore            Int
+  competitionLevel      String
+  commissionEstimate    String
+  priceRange            String
+  contentPotentialScore Int
+  source                String
+  sourceUrl             String?
+  confidence            Int
+  collectedAt           DateTime
+  isDemo                Boolean   @default(true)
+  notes                 String    @default("")
+  rawData               Json?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime
+  sourceType            String    @default("DEMO")
+  productUrl            String?
+  affiliateUrl          String?
+  price                 Float?
+  commissionRate        Float?
+  revenue               Float?
+  salesVolume           Int?
+  demandScore           Int?
+  competitionScore      Int?
+  commissionScore       Int?
+  opportunityScore      Int?
+  isEstimated           Boolean   @default(true)
+  lastSyncedAt          DateTime?
+
+  @@index([category, collectedAt])
+  @@index([platform, collectedAt])
+  @@index([sourceType, lastSyncedAt])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model AffiliateProgram {
+  id               String             @id
+  name             String
+  website          String
+  dashboardUrl     String
+  affiliateLink    String
+  commissionInfo   String             @default("")
+  products         Json?
+  notes            String             @default("")
+  status           String             @default("ACTIVE")
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime
+  AffiliateAccount AffiliateAccount[]
+
+  @@index([status, updatedAt])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model AgentRecommendation {
+  id                 String        @id
+  agentId            String
+  projectId          String?
+  contentItemId      String?
+  title              String
+  description        String
+  recommendationType String
+  priority           AgentPriority @default(MEDIUM)
+  score              Int           @default(80)
+  status             String        @default("OPEN")
+  createdAt          DateTime      @default(now())
+  AIAgent            AIAgent       @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  ContentItem        ContentItem?  @relation(fields: [contentItemId], references: [id])
+  Project            Project?      @relation(fields: [projectId], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model AgentTask {
+  id            String          @id
+  agentId       String
+  projectId     String?
+  contentItemId String?
+  taskType      AgentTaskType
+  title         String
+  description   String
+  status        AgentTaskStatus @default(COMPLETED)
+  result        String          @default("")
+  priority      AgentPriority   @default(MEDIUM)
+  createdAt     DateTime        @default(now())
+  completedAt   DateTime?
+  AIAgent       AIAgent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  ContentItem   ContentItem?    @relation(fields: [contentItemId], references: [id])
+  Project       Project?        @relation(fields: [projectId], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ApprovalHistory {
+  id            String        @id
+  contentItemId String
+  fromStatus    ContentStatus
+  toStatus      ContentStatus
+  note          String        @default("")
+  reason        String        @default("")
+  actionBy      String        @default("Admin")
+  createdAt     DateTime      @default(now())
+  ContentItem   ContentItem   @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model AssetCollection {
+  id                  String                @id
+  name                String
+  description         String                @default("")
+  projectId           String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime
+  Project             Project?              @relation(fields: [projectId], references: [id])
+  AssetCollectionItem AssetCollectionItem[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model AssetCollectionItem {
+  id              String          @id
+  collectionId    String
+  contentItemId   String
+  createdAt       DateTime        @default(now())
+  AssetCollection AssetCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  ContentItem     ContentItem     @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, contentItemId])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model AuditLog {
+  id         String   @id
+  action     String
+  entityType String
+  entityId   String?
+  message    String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model AutomationPlan {
+  id                   String               @id
+  projectId            String?
+  socialAccountId      String?
+  title                String
+  description          String
+  suggestedPlatform    SocialPlatform?
+  suggestedPostingTime String
+  reason               String
+  priority             AgentPriority        @default(MEDIUM)
+  status               AutomationPlanStatus @default(DRAFT)
+  createdByAgentId     String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime
+  AIAgent              AIAgent?             @relation(fields: [createdByAgentId], references: [id])
+  Project              Project?             @relation(fields: [projectId], references: [id])
+  SocialAccount        SocialAccount?       @relation(fields: [socialAccountId], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model CampaignAccount {
+  id                 String            @id
+  campaignId         String
+  affiliateAccountId String
+  createdAt          DateTime          @default(now())
+  AffiliateAccount   AffiliateAccount  @relation(fields: [affiliateAccountId], references: [id], onDelete: Cascade)
+  AffiliateCampaign  AffiliateCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, affiliateAccountId])
+  @@index([affiliateAccountId, createdAt])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ClipSetting {
+  id            String          @id
+  videoSourceId String
+  prompt        String
+  watermark     Boolean         @default(true)
+  subtitle      Boolean         @default(true)
+  category      String
+  clipCount     Int
+  duration      Int
+  resolution    String
+  layout        String          @default("Auto Reframe")
+  subtitleStyle String          @default("Bold Creator")
+  textPlacement String          @default("Lower Third")
+  ccLanguage    String          @default("id-ID")
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime
+  VideoSource   VideoSource     @relation(fields: [videoSourceId], references: [id], onDelete: Cascade)
+  GeneratedClip GeneratedClip[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ContentItem {
+  id                    String                  @id
+  projectId             String?
+  creativeAssetId       String?
+  generatedClipId       String?
+  type                  ContentType
+  title                 String
+  description           String
+  thumbnail             String
+  status                ContentStatus           @default(DRAFT)
+  platform              SocialPlatform?
+  tags                  String[]
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime
+  caption               String                  @default("")
+  approvedAt            DateTime?
+  approvedBy            String?
+  rejectReason          String                  @default("")
+  reviewNotes           String                  @default("")
+  workflowStatus        ContentStatus           @default(DRAFT)
+  cta                   String                  @default("")
+  editingStyle          String                  @default("")
+  fypScore              Int?
+  hook                  String                  @default("")
+  notes                 String                  @default("")
+  sourceType            String                  @default("")
+  suggestedDuration     Int?
+  targetAudience        String                  @default("")
+  trendKeyword          String                  @default("")
+  trendPlatform         SocialPlatform?
+  socialAccountId       String?
+  contentAngle          String                  @default("")
+  linkedFromContentId   String?
+  viralScorePrediction  Int?
+  archivedAt            DateTime?
+  assetStatus           LibraryAssetStatus      @default(ACTIVE)
+  isLatestVersion       Boolean                 @default(true)
+  parentAssetId         String?
+  trashedAt             DateTime?
+  versionNotes          String                  @default("")
+  versionNumber         Int                     @default(1)
+  approvalMessageId     String?
+  approvalStatus        String                  @default("")
+  failureReason         String                  @default("")
+  publishedAt           DateTime?
+  reviewer              String?
+  scheduledAt           DateTime?
+  telegramChatId        String?
+  AgentRecommendation   AgentRecommendation[]
+  AgentTask             AgentTask[]
+  ApprovalHistory       ApprovalHistory[]
+  AssetCollectionItem   AssetCollectionItem[]
+  CreativeAsset         CreativeAsset?          @relation(fields: [creativeAssetId], references: [id])
+  GeneratedClip         GeneratedClip?          @relation(fields: [generatedClipId], references: [id])
+  ContentItem           ContentItem?            @relation("ContentItemToContentItem", fields: [parentAssetId], references: [id])
+  other_ContentItem     ContentItem[]           @relation("ContentItemToContentItem")
+  Project               Project?                @relation(fields: [projectId], references: [id])
+  SocialAccount         SocialAccount?          @relation(fields: [socialAccountId], references: [id])
+  PostAnalytics         PostAnalytics[]
+  PostingSchedule       PostingSchedule[]
+  PublishingChecklist   PublishingChecklist[]
+  PublishingJob         PublishingJob[]
+  RecommendationInsight RecommendationInsight[]
+  TelegramApprovalLog   TelegramApprovalLog[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model CreativeAsset {
+  id              String          @id
+  projectId       String?
+  generationJobId String?
+  type            CreativeType
+  title           String
+  prompt          String
+  style           String?
+  aspectRatio     String?
+  motionPrompt    String?
+  provider        AIProviderName?
+  thumbnail       String
+  previewUrl      String?
+  status          AssetStatus     @default(READY)
+  metadata        Json?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime
+  ContentItem     ContentItem[]
+  GenerationJob   GenerationJob?  @relation(fields: [generationJobId], references: [id])
+  Project         Project?        @relation(fields: [projectId], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model DataDrivenAnalysis {
+  id                 String              @id
+  resultId           String?
+  keyword            String
+  mode               String
+  summary            String
+  trendStage         String
+  opportunityLevel   String
+  riskLevel          String
+  score              Int
+  confidence         Int
+  analysis           Json
+  sourceBreakdown    Json
+  isDemo             Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime
+  IntelligenceResult IntelligenceResult? @relation(fields: [resultId], references: [id])
+
+  @@index([keyword, createdAt])
+  @@index([resultId, createdAt])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model GeneratedClip {
+  id                 String               @id
+  videoSourceId      String
+  clipSettingId      String?
+  title              String
+  description        String
+  thumbnail          String
+  duration           Int
+  viralScore         Int
+  tags               String[]
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime
+  endTime            Int?
+  errorMessage       String?
+  outputFileUrl      String?
+  processingStatus   ProcessingStatus     @default(COMPLETED)
+  startTime          Int?
+  subtitleUrl        String?
+  thumbnailUrl       String?
+  ContentItem        ContentItem[]
+  ClipSetting        ClipSetting?         @relation(fields: [clipSettingId], references: [id])
+  VideoSource        VideoSource          @relation(fields: [videoSourceId], references: [id], onDelete: Cascade)
+  MediaProcessingJob MediaProcessingJob[]
+  PostingClipDetail  PostingClipDetail[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model GeneratedContent {
+  id                String             @id
+  campaignId        String?
+  opportunityId     String?
+  contentType       String
+  title             String
+  body              String
+  platform          String
+  tone              String
+  source            String
+  isDemo            Boolean            @default(true)
+  metadata          Json?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime
+  AffiliateCampaign AffiliateCampaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  SavedOpportunity  SavedOpportunity?  @relation(fields: [opportunityId], references: [id])
+
+  @@index([campaignId, contentType])
+  @@index([opportunityId, contentType])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model GenerationJob {
+  id            String          @id
+  projectId     String?
+  providerId    String?
+  type          CreativeType
+  prompt        String
+  status        JobStatus       @default(COMPLETED)
+  resultAssetId String?
+  errorMessage  String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime
+  duration      Int?
+  outputUrl     String?
+  providerMode  ProviderMode    @default(DUMMY)
+  CreativeAsset CreativeAsset[]
+  Project       Project?        @relation(fields: [projectId], references: [id])
+  AIProvider    AIProvider?     @relation(fields: [providerId], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model GoogleOAuthSetting {
+  id                    String         @id
+  clientIdEncrypted     String         @default("")
+  clientSecretEncrypted String         @default("")
+  redirectUri           String         @default("")
+  status                ProviderStatus @default(NOT_CONNECTED)
+  lastTestAt            DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model IntelligenceProviderSetting {
+  id              String    @id
+  provider        String    @unique
+  apiKeyEncrypted String?
+  status          String    @default("MISSING")
+  lastError       String?
+  lastCheckedAt   DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model IntelligenceResult {
+  id                    String                 @id
+  keyword               String
+  topic                 String
+  platform              String
+  source                String
+  sourceUrl             String?
+  score                 Int
+  confidence            Int
+  volumeLabel           String
+  trendDirection        String
+  category              String
+  region                String
+  language              String
+  collectedAt           DateTime
+  rawData               Json?
+  isDemo                Boolean                @default(true)
+  notes                 String                 @default("")
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime
+  searchRunId           String?
+  DataDrivenAnalysis    DataDrivenAnalysis[]
+  IntelligenceSearchRun IntelligenceSearchRun? @relation(fields: [searchRunId], references: [id])
+
+  @@index([keyword, collectedAt])
+  @@index([platform, collectedAt])
+  @@index([searchRunId, collectedAt])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model IntelligenceSearchRun {
+  id                 String               @id
+  query              String
+  niche              String               @default("")
+  mode               String
+  platforms          String[]
+  region             String
+  language           String
+  timeRange          String
+  status             String
+  resultCount        Int                  @default(0)
+  cacheKey           String               @unique
+  cachedUntil        DateTime
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime
+  IntelligenceResult IntelligenceResult[]
+
+  @@index([cachedUntil])
+  @@index([query, region, createdAt])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model KnowledgeEntry {
+  id          String   @id
+  fingerprint String   @unique
+  category    String
+  topic       String
+  niche       String
+  platform    String
+  content     Json
+  tags        String[]
+  confidence  Int      @default(70)
+  sourceType  String   @default("ENGINE")
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+
+  @@index([category, updatedAt])
+  @@index([platform, updatedAt])
+  @@index([tags], type: Gin)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model MediaProcessingJob {
+  id              String           @id
+  projectId       String?
+  videoSourceId   String?
+  generatedClipId String?
+  jobType         MediaJobType
+  status          ProcessingStatus @default(QUEUED)
+  progress        Int              @default(0)
+  inputUrl        String
+  outputUrl       String?
+  errorMessage    String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime
+  logs            String[]         @default([])
+  GeneratedClip   GeneratedClip?   @relation(fields: [generatedClipId], references: [id])
+  Project         Project?         @relation(fields: [projectId], references: [id])
+  VideoSource     VideoSource?     @relation(fields: [videoSourceId], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Notification {
+  id        String   @id
+  title     String
+  message   String
+  type      String
+  severity  String   @default("INFO")
+  source    String
+  status    String   @default("UNREAD")
+  actionUrl String?
+  createdAt DateTime @default(now())
+
+  @@index([status, createdAt])
+  @@index([type, createdAt])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model OAuthCredential {
+  id                    String        @id
+  provider              String
+  socialAccountId       String
+  accessTokenEncrypted  String
+  refreshTokenEncrypted String?
+  scope                 String
+  expiresAt             DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime
+  SocialAccount         SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model OAuthProviderSetting {
+  id                    String         @id
+  provider              String         @unique
+  clientIdEncrypted     String         @default("")
+  clientSecretEncrypted String         @default("")
+  redirectUri           String         @default("")
+  status                ProviderStatus @default(NOT_CONNECTED)
+  lastTestAt            DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model PlatformPerformanceSnapshot {
+  id                 String         @id
+  projectId          String?
+  socialAccountId    String?
+  platform           SocialPlatform
+  views              Int            @default(0)
+  likes              Int            @default(0)
+  comments           Int            @default(0)
+  shares             Int            @default(0)
+  saves              Int            @default(0)
+  watchTime          Int            @default(0)
+  engagementRate     Float          @default(0)
+  snapshotDate       DateTime       @default(now())
+  createdAt          DateTime       @default(now())
+  campaignId         String?
+  generatedContentId String?
+  productName        String         @default("")
+  clicks             Int            @default(0)
+  sales              Int            @default(0)
+  commission         Float          @default(0)
+  Project            Project?       @relation(fields: [projectId], references: [id])
+  SocialAccount      SocialAccount? @relation(fields: [socialAccountId], references: [id])
+
+  @@index([campaignId, snapshotDate])
+  @@index([generatedContentId, snapshotDate])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model PostAnalytics {
+  id                  String           @id
+  projectId           String?
+  contentItemId       String
+  socialAccountId     String
+  postingScheduleId   String?
+  platform            SocialPlatform
+  views               Int              @default(0)
+  likes               Int              @default(0)
+  comments            Int              @default(0)
+  shares              Int              @default(0)
+  saves               Int              @default(0)
+  watchTime           Int              @default(0)
+  engagementRate      Float            @default(0)
+  capturedAt          DateTime         @default(now())
+  createdAt           DateTime         @default(now())
+  averageViewDuration Float            @default(0)
+  followersGained     Int              @default(0)
+  notes               String           @default("")
+  postUrl             String           @default("")
+  postedAt            DateTime?
+  recordedAt          DateTime         @default(now())
+  ContentItem         ContentItem      @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  PostingSchedule     PostingSchedule? @relation(fields: [postingScheduleId], references: [id])
+  Project             Project?         @relation(fields: [projectId], references: [id])
+  SocialAccount       SocialAccount    @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model PostingClipDetail {
+  id                String          @id
+  postingScheduleId String
+  generatedClipId   String
+  title             String
+  description       String
+  tags              String[]
+  privacyStatus     PrivacyStatus   @default(PUBLIC)
+  notifySubscriber  Boolean         @default(true)
+  madeForKids       Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+  GeneratedClip     GeneratedClip   @relation(fields: [generatedClipId], references: [id], onDelete: Cascade)
+  PostingSchedule   PostingSchedule @relation(fields: [postingScheduleId], references: [id], onDelete: Cascade)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model PostingSchedule {
+  id                  String                @id
+  videoSourceId       String?
+  socialAccountId     String
+  destination         Platform
+  startDate           DateTime
+  postingTime         String
+  postingEndTime      String
+  timezone            String                @default("Asia/Jakarta")
+  videosPerDay        Int
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime
+  projectId           String?
+  contentItemId       String?
+  scheduledAt         DateTime?
+  socialPlatform      SocialPlatform?
+  status              ScheduleStatus        @default(DRAFT)
+  notes               String                @default("")
+  publishMode         PublishMode           @default(MANUAL)
+  PostAnalytics       PostAnalytics[]
+  PostingClipDetail   PostingClipDetail[]
+  ContentItem         ContentItem?          @relation(fields: [contentItemId], references: [id])
+  Project             Project?              @relation(fields: [projectId], references: [id])
+  SocialAccount       SocialAccount         @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  VideoSource         VideoSource?          @relation(fields: [videoSourceId], references: [id])
+  PublishingChecklist PublishingChecklist[]
+  PublishingJob       PublishingJob[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Project {
+  id                          String                        @id
+  name                        String
+  niche                       String
+  category                    String
+  targetAccounts              String[]
+  contentMode                 ContentMode                   @default(CLIPPER)
+  createdAt                   DateTime                      @default(now())
+  updatedAt                   DateTime
+  AgentRecommendation         AgentRecommendation[]
+  AgentTask                   AgentTask[]
+  AssetCollection             AssetCollection[]
+  AutomationPlan              AutomationPlan[]
+  ContentItem                 ContentItem[]
+  CreativeAsset               CreativeAsset[]
+  GenerationJob               GenerationJob[]
+  MediaProcessingJob          MediaProcessingJob[]
+  PlatformPerformanceSnapshot PlatformPerformanceSnapshot[]
+  PostAnalytics               PostAnalytics[]
+  PostingSchedule             PostingSchedule[]
+  RecommendationInsight       RecommendationInsight[]
+  SocialAccount               SocialAccount[]
+  VideoSource                 VideoSource[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ProviderCredential {
+  id              String     @id
+  providerId      String
+  apiKeyEncrypted String     @default("")
+  label           String     @default("default")
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime
+  AIProvider      AIProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model PublishingChecklist {
+  id                String           @id
+  contentItemId     String
+  postingScheduleId String?
+  assetChecked      Boolean          @default(false)
+  captionCopied     Boolean          @default(false)
+  hashtagCopied     Boolean          @default(false)
+  uploadedManually  Boolean          @default(false)
+  postUrlAdded      Boolean          @default(false)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime
+  ContentItem       ContentItem      @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  PostingSchedule   PostingSchedule? @relation(fields: [postingScheduleId], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model PublishingJob {
+  id                 String              @id
+  postingScheduleId  String
+  contentItemId      String
+  socialAccountId    String
+  platform           SocialPlatform
+  publishMode        PublishMode
+  status             PublishingJobStatus @default(READY_TO_POST)
+  providerJobId      String?
+  postUrl            String              @default("")
+  errorMessage       String?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime
+  platformPostId     String?
+  platformPostUrl    String?
+  publishCompletedAt DateTime?
+  publishStartedAt   DateTime?
+  retryCount         Int                 @default(0)
+  ContentItem        ContentItem         @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  PostingSchedule    PostingSchedule     @relation(fields: [postingScheduleId], references: [id], onDelete: Cascade)
+  SocialAccount      SocialAccount       @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  PublishingLog      PublishingLog[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model PublishingLog {
+  id              String             @id
+  publishingJobId String
+  level           PublishingLogLevel @default(INFO)
+  message         String
+  metadata        Json?
+  createdAt       DateTime           @default(now())
+  PublishingJob   PublishingJob      @relation(fields: [publishingJobId], references: [id], onDelete: Cascade)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model RecommendationInsight {
+  id              String         @id
+  projectId       String?
+  socialAccountId String?
+  contentItemId   String?
+  insightType     String
+  title           String
+  description     String
+  score           Int
+  recommendation  String
+  priority        String
+  createdAt       DateTime       @default(now())
+  ContentItem     ContentItem?   @relation(fields: [contentItemId], references: [id])
+  Project         Project?       @relation(fields: [projectId], references: [id])
+  SocialAccount   SocialAccount? @relation(fields: [socialAccountId], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model SavedOpportunity {
+  id               String             @id
+  title            String
+  type             String
+  source           String
+  sourceUrl        String?
+  platform         String
+  score            Int
+  confidence       Int
+  reason           String
+  notes            String             @default("")
+  isDemo           Boolean            @default(true)
+  status           String             @default("saved")
+  metadata         Json?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime
+  GeneratedContent GeneratedContent[]
+
+  @@index([status, createdAt])
+  @@index([type, createdAt])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model SocialAccount {
+  id                          String                        @id
+  name                        String
+  platform                    Platform?
+  handle                      String?
+  createdAt                   DateTime                      @default(now())
+  updatedAt                   DateTime
+  isActive                    Boolean                       @default(true)
+  loginNotes                  String?
+  niche                       String?
+  projectId                   String?
+  socialPlatform              SocialPlatform?
+  status                      SocialConnectionStatus        @default(MANUAL)
+  disabledAt                  DateTime?
+  lastActivityAt              DateTime?
+  notes                       String                        @default("")
+  uploadMethod                UploadMethod                  @default(MANUAL)
+  accessTokenEncrypted        String?
+  authStatus                  AuthStatus                    @default(NOT_CONNECTED)
+  connectionNotes             String                        @default("")
+  lastSyncAt                  DateTime?
+  refreshTokenEncrypted       String?
+  tokenExpiresAt              DateTime?
+  uploadMode                  PublishMode                   @default(MANUAL)
+  platformAccountAvatar       String?
+  platformAccountId           String?
+  platformAccountName         String?
+  permissionStatus            String                        @default("NOT_REQUESTED")
+  AutomationPlan              AutomationPlan[]
+  ContentItem                 ContentItem[]
+  OAuthCredential             OAuthCredential[]
+  PlatformPerformanceSnapshot PlatformPerformanceSnapshot[]
+  PostAnalytics               PostAnalytics[]
+  PostingSchedule             PostingSchedule[]
+  PublishingJob               PublishingJob[]
+  RecommendationInsight       RecommendationInsight[]
+  Project                     Project?                      @relation(fields: [projectId], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model TelegramApprovalLog {
+  id                String                 @id
+  contentItemId     String
+  action            TelegramApprovalAction
+  telegramMessageId String?
+  telegramChatId    String?
+  status            TelegramLogStatus      @default(PENDING)
+  responseBy        String?
+  responseAt        DateTime?
+  errorMessage      String?
+  createdAt         DateTime               @default(now())
+  ContentItem       ContentItem            @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model TelegramSetting {
+  id                String         @id
+  botTokenEncrypted String         @default("")
+  chatId            String         @default("")
+  status            TelegramStatus @default(NOT_CONNECTED)
+  lastTestAt        DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model VideoSource {
+  id                 String               @id
+  platform           Platform
+  url                String
+  videoId            String?
+  title              String
+  thumbnail          String
+  embedUrl           String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime
+  projectId          String?
+  fileSize           Int?
+  mimeType           String?
+  originalFileName   String?
+  sourceFileUrl      String?
+  sourceType         VideoSourceType      @default(URL)
+  ClipSetting        ClipSetting[]
+  GeneratedClip      GeneratedClip[]
+  MediaProcessingJob MediaProcessingJob[]
+  PostingSchedule    PostingSchedule[]
+  Project            Project?             @relation(fields: [projectId], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model YouTubeQuotaLog {
+  id            String   @id
+  endpoint      String
+  keyword       String
+  region        String
+  estimatedCost Int
+  status        String
+  errorMessage  String?
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([endpoint, createdAt])
+}
+
+enum SourceType {
+  DEMO
+  MANUAL
+  CSV_IMPORT
+  REAL_API
+}
+
+enum Platform {
+  YOUTUBE
+  TIKTOK
+  INSTAGRAM
+  ALL
+  FACEBOOK
+}
+
+enum ContentStatus {
+  DRAFT
+  READY
+  SCHEDULED
+  POSTED
+  FAILED
+  REVIEW
+  APPROVED
+  REJECTED
+  PUBLISHED
+  PAUSED
+  ARCHIVED
+}
+
+enum PerformanceLevel {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum PriorityLevel {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum RecommendationType {
+  NICHE
+  CAMPAIGN
+  CONTENT
+  PUBLISHING
+  WARNING
+  GROWTH
+}
+
+enum PublishingContentType {
+  CLIP
+  IMAGE
+  STORY
+  SHORTS
+  REELS
+  POST
+}
+
+enum AIProviderName {
+  GEMINI_VEO
+  OPENAI_SORA
+  RUNWAY
+  PIKA
+  LUMA
+  MANUAL_UPLOAD
+}
+
+enum AIProviderStatus {
+  NOT_CONFIGURED
+  CONFIGURED
+  READY
+  ERROR
+  DUMMY
+}
+
+enum AgentPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum AgentRole {
+  CEO
+  RESEARCH
+  SCRIPT
+  CLIPPER
+  CREATIVE
+  SCHEDULER
+  ANALYST
+}
+
+enum AgentStatus {
+  ACTIVE
+  PAUSED
+  DISABLED
+}
+
+enum AgentTaskStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum AgentTaskType {
+  RESEARCH_TREND
+  GENERATE_CONTENT_IDEA
+  REVIEW_CONTENT
+  RECOMMEND_SCHEDULE
+  ANALYZE_PERFORMANCE
+}
+
+enum AssetStatus {
+  READY
+  PROCESSING
+  FAILED
+}
+
+enum AuthStatus {
+  NOT_CONNECTED
+  CONNECTED
+  EXPIRED
+  ERROR
+}
+
+enum AutomationPlanStatus {
+  DRAFT
+  WAITING_APPROVAL
+  APPROVED
+  REJECTED
+  EXECUTED
+}
+
+enum ContentMode {
+  CLIPPER
+  IMAGE_GENERATOR
+  AI_VIDEO_GENERATOR
+}
+
+enum ContentType {
+  CLIP
+  IMAGE
+  MOTION_IMAGE
+  AI_VIDEO
+  SCHEDULED_POST
+  IDEA
+  SCRIPT
+  CLIP_PLAN
+}
+
+enum CreativeType {
+  IMAGE
+  MOTION_IMAGE
+  AI_VIDEO
+}
+
+enum JobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum LibraryAssetStatus {
+  ACTIVE
+  ARCHIVED
+  TRASHED
+}
+
+enum MediaJobType {
+  UPLOAD
+  CLIP_PROCESSING
+  THUMBNAIL
+  SUBTITLE
+}
+
+enum PrivacyStatus {
+  PUBLIC
+  PRIVATE
+  UNLISTED
+}
+
+enum ProcessingStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+  GENERATING_SUBTITLE
+  GENERATING_THUMBNAIL
+}
+
+enum ProviderMode {
+  DUMMY
+  REAL
+}
+
+enum ProviderStatus {
+  CONNECTED
+  NOT_CONNECTED
+}
+
+enum PublishMode {
+  MANUAL
+  SEMI_AUTO
+  AUTO
+}
+
+enum PublishingJobStatus {
+  READY_TO_POST
+  PUBLISHING
+  POSTED
+  FAILED
+  CANCELED
+}
+
+enum PublishingLogLevel {
+  INFO
+  WARN
+  ERROR
+}
+
+enum ScheduleStatus {
+  DRAFT
+  SCHEDULED
+  POSTED
+  FAILED
+  CANCELED
+  READY_TO_POST
+  PUBLISHING
+}
+
+enum SocialConnectionStatus {
+  CONNECTED
+  MANUAL
+  NOT_CONNECTED
+  DISABLED
+}
+
+enum SocialPlatform {
+  TIKTOK
+  YOUTUBE_SHORTS
+  INSTAGRAM_REELS
+  FACEBOOK_REELS
+}
+
+enum TelegramApprovalAction {
+  SENT_REVIEW
+  SENT_APPROVED
+  APPROVED
+  REJECTED
+  TEST
+  REVIEW
+}
+
+enum TelegramLogStatus {
+  PENDING
+  SENT
+  FAILED
+  RESPONDED
+}
+
+enum TelegramStatus {
+  CONNECTED
+  NOT_CONNECTED
+  ERROR
+}
+
+enum UploadMethod {
+  MANUAL
+  API
+  BROWSER_AUTOMATION
+}
+
+enum VideoSourceType {
+  URL
+  UPLOAD
+}
+
+model ContentLibraryItem {
+  id              String           @id @default(cuid())
+  title           String
+  category        String
+  platform        Platform
+  campaign        String           @default("Unassigned")
+  status          ContentStatus    @default(READY)
+  metric          String?
+  date            String?
+  performance     PerformanceLevel @default(MEDIUM)
+  sourceType      SourceType       @default(REAL_API)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([platform])
+  @@index([status])
   @@index([sourceType])
 }
