@@ -129,5 +129,5 @@ export interface AIRecommendation {
   title: string;
   description: string;
   action: string;
-  status: "Demo Data" | "Not Connected";
+  status: "Real Data" | "Not Connected";
 }

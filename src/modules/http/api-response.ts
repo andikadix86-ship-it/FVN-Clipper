@@ -1,3 +1,5 @@
+import { getHttpStatus, toApiErrorPayload } from "./api-error";
+
 export function jsonResponse(data: unknown, init: ResponseInit = {}) {
   return new Response(JSON.stringify(data), {
     ...init,
@@ -9,16 +11,5 @@ export function jsonResponse(data: unknown, init: ResponseInit = {}) {
 }
 
 export function errorResponse(error: unknown) {
-  const message = error instanceof Error ? error.message : "Unexpected API error";
-  const errorStatus = (error as { statusCode?: unknown } | null)?.statusCode;
-  const status = typeof errorStatus === "number" ? errorStatus : 500;
-
-  return jsonResponse(
-    {
-      error: message,
-      data: null,
-      success: false
-    },
-    { status }
-  );
+  return jsonResponse(toApiErrorPayload(error), { status: getHttpStatus(error) });
 }

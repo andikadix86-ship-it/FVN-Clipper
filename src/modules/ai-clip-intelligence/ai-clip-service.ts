@@ -1,6 +1,5 @@
-import { ContentStatus, PerformanceLevel, Platform, Prisma } from "@prisma/client";
-import { getDemoCategories, getDemoCompetitors, getDemoOpportunities, setDemoOpportunitySaved } from "../demo/demo-data";
-import { isDatabaseConfigured, prisma } from "../db/prisma";
+import { ContentStatus, PerformanceLevel, Platform, Prisma, SourceType } from "@prisma/client";
+import { assertDatabaseConfigured, prisma } from "../db/prisma";
 
 export interface OpportunityFilters {
   keyword?: string | null;
@@ -21,22 +20,18 @@ export interface CompetitorFilters {
 }
 
 export function getCategories() {
-  if (!isDatabaseConfigured()) {
-    return getDemoCategories();
-  }
+  assertDatabaseConfigured();
 
   return prisma.category.findMany({
-    where: { isActive: true },
+    where: { ...realSourceWhere(), isActive: true },
     orderBy: { name: "asc" }
   });
 }
 
 export function getCompetitors(filters: CompetitorFilters = {}) {
-  if (!isDatabaseConfigured()) {
-    return getDemoCompetitors(filters);
-  }
+  assertDatabaseConfigured();
 
-  const where: Prisma.CompetitorProfileWhereInput = {};
+  const where: Prisma.CompetitorProfileWhereInput = realSourceWhere();
   const platform = parseEnumValue(filters.platform, Platform);
 
   if (platform && platform !== Platform.ALL) {
@@ -54,11 +49,9 @@ export function getCompetitors(filters: CompetitorFilters = {}) {
 }
 
 export function getOpportunities(filters: OpportunityFilters = {}) {
-  if (!isDatabaseConfigured()) {
-    return getDemoOpportunities(filters);
-  }
+  assertDatabaseConfigured();
 
-  const where: Prisma.AiClipOpportunityWhereInput = {};
+  const where: Prisma.AiClipOpportunityWhereInput = realSourceWhere();
   const keyword = filters.keyword?.trim();
   const platform = parseEnumValue(filters.platform, Platform);
   const status = parseEnumValue(filters.status, ContentStatus);
@@ -73,7 +66,7 @@ export function getOpportunities(filters: OpportunityFilters = {}) {
     ];
   }
 
-  if (filters.category && filters.category !== "Demo Data" && filters.category !== "All") {
+  if (filters.category && filters.category !== "All") {
     where.category = {
       is: {
         OR: [{ slug: filters.category }, { id: filters.category }]
@@ -124,12 +117,10 @@ export function getOpportunities(filters: OpportunityFilters = {}) {
 }
 
 export async function setOpportunitySaved(id: string, saved?: boolean) {
-  if (!isDatabaseConfigured()) {
-    return setDemoOpportunitySaved(id, saved);
-  }
+  assertDatabaseConfigured();
 
-  const current = await prisma.aiClipOpportunity.findUnique({
-    where: { id },
+  const current = await prisma.aiClipOpportunity.findFirst({
+    where: { id, ...realSourceWhere() },
     select: { isSaved: true }
   });
 
@@ -203,4 +194,8 @@ function parseEnumValue<T extends Record<string, string>>(value: string | null |
 
   const normalized = value.toUpperCase().replace(/-/g, "_");
   return Object.values(values).find((item) => item === normalized) as T[keyof T] | undefined;
+}
+
+function realSourceWhere() {
+  return { sourceType: { not: SourceType.DEMO } };
 }

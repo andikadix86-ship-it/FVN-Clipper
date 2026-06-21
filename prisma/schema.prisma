@@ -66,7 +66,7 @@ model Category {
   slug          String              @unique
   description   String?
   isActive      Boolean             @default(true)
-  sourceType    SourceType          @default(DEMO)
+  sourceType    SourceType          @default(REAL_API)
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
   campaigns     Campaign[]
@@ -86,7 +86,7 @@ model Campaign {
   categoryId          String?
   startDate           DateTime?
   endDate             DateTime?
-  sourceType          SourceType           @default(DEMO)
+  sourceType          SourceType           @default(REAL_API)
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   category            Category?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
@@ -118,7 +118,7 @@ model AiClipOpportunity {
   contentAngles       Json
   thumbnailIdeas      Json?
   sourceUrl           String?
-  sourceType          SourceType           @default(DEMO)
+  sourceType          SourceType           @default(REAL_API)
   isSaved             Boolean              @default(false)
   savedAt             DateTime?
   categoryId          String?
@@ -148,7 +148,7 @@ model DashboardRecommendation {
   recommendationType RecommendationType
   actionLabel        String?
   actionTarget       String?
-  sourceType         SourceType         @default(DEMO)
+  sourceType         SourceType         @default(REAL_API)
   isRead             Boolean            @default(false)
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
@@ -170,7 +170,7 @@ model PublishingSchedule {
   publishedAt   DateTime?
   campaignId    String?
   opportunityId String?
-  sourceType    SourceType            @default(DEMO)
+  sourceType    SourceType            @default(REAL_API)
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
   campaign      Campaign?             @relation(fields: [campaignId], references: [id], onDelete: SetNull)
@@ -197,7 +197,7 @@ model CompetitorProfile {
   contentPattern Json?
   strengths      Json?
   weaknesses     Json?
-  sourceType     SourceType @default(DEMO)
+  sourceType     SourceType @default(REAL_API)
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 

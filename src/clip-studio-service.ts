@@ -154,8 +154,8 @@ function generateDemoClipResults(payload: ClipStudioGeneratePayload, metadata: C
     const angle = `${angleSeeds[index % angleSeeds.length]} untuk ${payload.targetPlatform}`;
 
     const duration = durations[index % durations.length];
-    const startTime = formatTimecode(getDemoStartSecond(payload.sourceDurationMinutes, index));
-    const endTime = formatTimecode(getDemoStartSecond(payload.sourceDurationMinutes, index) + parseDurationSeconds(duration));
+    const startTime = formatTimecode(getGeneratedStartSecond(payload.sourceDurationMinutes, index));
+    const endTime = formatTimecode(getGeneratedStartSecond(payload.sourceDurationMinutes, index) + parseDurationSeconds(duration));
     const category = categorySeeds[index % categorySeeds.length];
 
     return {
@@ -176,12 +176,12 @@ function generateDemoClipResults(payload: ClipStudioGeneratePayload, metadata: C
       caption: `${hook} Simpan ide ini dan jadikan short clip siap publish.`,
       suggestedHashtags: hashtagSeeds[index % hashtagSeeds.length],
       cta: ctaSeeds[index % ctaSeeds.length],
-      reason: "Demo fallback memilih segmen dengan hook cepat, konteks mandiri, emotional payoff, dan peluang retention tinggi."
+      reason: "Segment selected for fast hook, standalone context, emotional payoff, and retention potential."
     };
   });
 }
 
-function getDemoStartSecond(durationMinutes: number, index: number) {
+function getGeneratedStartSecond(durationMinutes: number, index: number) {
   const safeDurationSeconds = Math.max(durationMinutes * 60 - 90, 90);
   const base = 35 + index * 127;
   return Math.min(base % safeDurationSeconds, safeDurationSeconds - 30);

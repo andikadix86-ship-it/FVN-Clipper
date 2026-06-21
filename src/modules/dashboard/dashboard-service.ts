@@ -1,6 +1,5 @@
-import { ContentStatus, Platform, Prisma } from "@prisma/client";
-import { getDemoCampaigns, getDemoDashboardOverview, getDemoPublishingCalendar, getDemoRecommendations } from "../demo/demo-data";
-import { isDatabaseConfigured, prisma } from "../db/prisma";
+import { ContentStatus, Platform, Prisma, SourceType } from "@prisma/client";
+import { assertDatabaseConfigured, prisma } from "../db/prisma";
 
 export interface PublishingCalendarFilters {
   platform?: string | null;
@@ -9,22 +8,22 @@ export interface PublishingCalendarFilters {
 }
 
 export async function getDashboardOverview() {
-  if (!isDatabaseConfigured()) {
-    return getDemoDashboardOverview();
-  }
+  assertDatabaseConfigured();
+
+  const realDataWhere = realSourceWhere();
 
   const [totalCampaigns, totalOpportunities, savedOpportunities, scheduledPosts, publishedPosts, failedPosts, topCategories, latestRecommendations] = await Promise.all([
-    prisma.campaign.count(),
-    prisma.aiClipOpportunity.count(),
-    prisma.aiClipOpportunity.count({ where: { isSaved: true } }),
-    prisma.publishingSchedule.count({ where: { status: ContentStatus.SCHEDULED } }),
-    prisma.publishingSchedule.count({ where: { status: ContentStatus.PUBLISHED } }),
-    prisma.publishingSchedule.count({ where: { status: ContentStatus.FAILED } }),
+    prisma.campaign.count({ where: realDataWhere }),
+    prisma.aiClipOpportunity.count({ where: realDataWhere }),
+    prisma.aiClipOpportunity.count({ where: { ...realDataWhere, isSaved: true } }),
+    prisma.publishingSchedule.count({ where: { ...realDataWhere, status: ContentStatus.SCHEDULED } }),
+    prisma.publishingSchedule.count({ where: { ...realDataWhere, status: ContentStatus.PUBLISHED } }),
+    prisma.publishingSchedule.count({ where: { ...realDataWhere, status: ContentStatus.FAILED } }),
     prisma.category.findMany({
-      where: { isActive: true },
+      where: { ...realDataWhere, isActive: true },
       include: {
         _count: {
-          select: { opportunities: true }
+          select: { opportunities: { where: realSourceWhere() } }
         }
       },
       orderBy: {
@@ -35,6 +34,7 @@ export async function getDashboardOverview() {
       take: 5
     }),
     prisma.dashboardRecommendation.findMany({
+      where: realDataWhere,
       orderBy: [{ priority: "asc" }, { createdAt: "desc" }],
       take: 5
     })
@@ -62,21 +62,19 @@ export async function getDashboardOverview() {
 }
 
 export function getDashboardRecommendations() {
-  if (!isDatabaseConfigured()) {
-    return getDemoRecommendations();
-  }
+  assertDatabaseConfigured();
 
   return prisma.dashboardRecommendation.findMany({
+    where: realSourceWhere(),
     orderBy: [{ isRead: "asc" }, { priority: "asc" }, { createdAt: "desc" }]
   });
 }
 
 export function getDashboardCampaigns() {
-  if (!isDatabaseConfigured()) {
-    return getDemoCampaigns();
-  }
+  assertDatabaseConfigured();
 
   return prisma.campaign.findMany({
+    where: realSourceWhere(),
     include: {
       category: true,
       _count: {
@@ -91,11 +89,9 @@ export function getDashboardCampaigns() {
 }
 
 export function getPublishingCalendar(filters: PublishingCalendarFilters) {
-  if (!isDatabaseConfigured()) {
-    return getDemoPublishingCalendar(filters);
-  }
+  assertDatabaseConfigured();
 
-  const where: Prisma.PublishingScheduleWhereInput = {};
+  const where: Prisma.PublishingScheduleWhereInput = realSourceWhere();
   const platform = parseEnumValue(filters.platform, Platform);
   const status = parseEnumValue(filters.status, ContentStatus);
 
@@ -148,4 +144,8 @@ function parseEnumValue<T extends Record<string, string>>(value: string | null |
 
   const normalized = value.toUpperCase().replace(/-/g, "_");
   return Object.values(values).find((item) => item === normalized) as T[keyof T] | undefined;
+}
+
+function realSourceWhere() {
+  return { sourceType: { not: SourceType.DEMO } };
 }

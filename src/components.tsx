@@ -22,8 +22,10 @@ import {
   XCircle
 } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { chartData, navItems, recommendations } from "./data/ai-clipper-demo";
+import { navItems } from "./data/ai-clipper-demo";
 import type { Account, Activity, Campaign, ContentItem, GeneratedClip, ScheduleItem, Stat, StatusTone, VideoOpportunity } from "./types";
+
+const analyticsChartData: Array<{ name: string; views: number; engagement: number }> = [];
 
 interface SidebarProps {
   activePage: string;
@@ -273,13 +275,13 @@ export function ScoreBadge({ score, label }: { score: number; label?: string }) 
 }
 
 export function FilterBar({ filters }: { filters: string[] }) {
-  const [activeFilter, setActiveFilter] = useState(filters[0] ?? "Demo filters");
+  const [activeFilter, setActiveFilter] = useState(filters[0] ?? "Data filters");
 
   return (
     <div className="filter-bar">
       <div className="filter-label">
         <Filter size={16} />
-        <span>Demo filters</span>
+        <span>Data filters</span>
       </div>
       {filters.map((filter) => (
         <button type="button" className={`filter-chip ${activeFilter === filter ? "active" : ""}`} onClick={() => setActiveFilter(filter)} key={filter}>
@@ -298,7 +300,7 @@ export function VideoOpportunityCard({ item, onClip, onSave }: { item: VideoOppo
       <div className="opportunity-body">
         <div className="row between gap">
           <SocialIcon platform={item.platform} />
-          {item.sourceType && <StatusBadge label={item.sourceType} tone={item.sourceType === "DEMO" ? "blue" : "slate"} />}
+          {item.sourceType && <StatusBadge label={item.sourceType} tone={sourceTypeTone(item.sourceType)} />}
           <ScoreBadge score={item.viralScore} label="Viral" />
         </div>
         <h3>{item.title}</h3>
@@ -365,7 +367,7 @@ export function VideoOpportunityTable({
               <td>
                 <div className="score-stack">
                   <StatusBadge label={item.status} tone={getStatusTone(item.status)} />
-                  {item.sourceType && <StatusBadge label={item.sourceType} tone={item.sourceType === "DEMO" ? "blue" : "slate"} />}
+                  {item.sourceType && <StatusBadge label={item.sourceType} tone={sourceTypeTone(item.sourceType)} />}
                 </div>
               </td>
               <td>
@@ -415,7 +417,7 @@ export function ComplianceChecklist() {
     ["CTA valid", "PASS", "green", "CTA detected near closing frame."],
     ["Hashtag valid", "WARNING", "amber", "One hashtag may be blocked by campaign rules."],
     ["Product mention valid", "PASS", "green", "Product mention found in caption."],
-    ["Platform policy valid", "PASS", "green", "No obvious policy issue in demo scan."],
+    ["Platform policy valid", "PASS", "green", "No obvious policy issue in the current scan."],
     ["Campaign rule valid", "FAILED", "red", "Required provider phrase is missing."]
   ] as const;
   const [fixed, setFixed] = useState<string[]>([]);
@@ -455,7 +457,6 @@ export function ContentCard({ item, onArchive, onSchedule }: { item: ContentItem
       </div>
       <div>
         <StatusBadge label={item.status} tone={tone} />
-        <StatusBadge label="Demo Data" tone="slate" />
         <h3>{item.title}</h3>
         <p>{item.category} - {item.platform}</p>
         <p className="muted">{item.campaign}</p>
@@ -481,7 +482,6 @@ export function AccountCard({ account, onRefresh, onToggle }: { account: Account
         <p>{account.platform}</p>
       </div>
       <StatusBadge label={account.status} tone={tone} />
-      <StatusBadge label="Demo Data" tone="slate" />
       <span className="muted">{account.health} - Last sync: {account.lastSync}</span>
       <div className="row">
         <button className="secondary-button tiny" type="button" onClick={() => onRefresh?.(account)}>Refresh Status</button>
@@ -497,14 +497,18 @@ export function AccountCard({ account, onRefresh, onToggle }: { account: Account
 
 export function CalendarPreview({ schedules = [] }: { schedules?: ScheduleItem[] }) {
   const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const slots = ["TikTok A", "YouTube A", "Instagram A", "TikTok B", "Facebook"];
+
+  if (schedules.length === 0) {
+    return <EmptyState title="No publishing calendar data" description="Real publishing schedules have not been returned by the API." />;
+  }
+
   return (
     <div className="calendar-grid">
       {days.map((day, index) => (
         <div className="calendar-day" key={day}>
           <strong>{day}</strong>
           <span>{index + 18}</span>
-          {[...slots.slice(0, (index % 3) + 2), ...schedules.filter((schedule) => schedule.day === day).map((schedule) => `${schedule.time} ${schedule.account}`)].map((slot) => (
+          {schedules.filter((schedule) => schedule.day === day).map((schedule) => `${schedule.time} ${schedule.account}`).map((slot) => (
             <button className="calendar-pill" type="button" key={`${day}-${slot}`}>
               <SocialIcon platform={slot} size="small" />
               {slot}
@@ -535,11 +539,15 @@ export function ActivityFeed({ items }: { items: Activity[] }) {
 }
 
 export function AnalyticsChart({ variant = "area" }: { variant?: "area" | "bar" }) {
+  if (analyticsChartData.length === 0) {
+    return <EmptyState title="Analytics provider not connected" description="Real analytics data has not been returned by the API." />;
+  }
+
   return (
     <div className="chart-box">
       <ResponsiveContainer width="100%" height={260}>
         {variant === "area" ? (
-          <AreaChart data={chartData}>
+          <AreaChart data={analyticsChartData}>
             <defs>
               <linearGradient id="viewsGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#2563eb" stopOpacity={0.28} />
@@ -553,7 +561,7 @@ export function AnalyticsChart({ variant = "area" }: { variant?: "area" | "bar" 
             <Area type="monotone" dataKey="views" stroke="#2563eb" fillOpacity={1} fill="url(#viewsGradient)" />
           </AreaChart>
         ) : (
-          <BarChart data={chartData}>
+          <BarChart data={analyticsChartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis dataKey="name" stroke="#64748b" />
             <YAxis stroke="#64748b" />
@@ -585,6 +593,7 @@ export function RightPanel({ accounts }: { accounts: Account[] }) {
           <button className="ghost-button tiny" type="button">View All</button>
         </div>
         <div className="mini-list">
+          {accounts.length === 0 && <EmptyState title="No connected accounts" description="Social accounts are not connected yet." />}
           {accounts.slice(0, 8).map((account) => (
             <div className="account-list-row" key={account.name}>
               <SocialIcon platform={account.platform} />
@@ -603,16 +612,7 @@ export function RightPanel({ accounts }: { accounts: Account[] }) {
           <h3>AI Recommendation For You</h3>
           <button className="ghost-button tiny" type="button">See All</button>
         </div>
-        {recommendations.map((item, index) => (
-          <div className="recommendation-row" key={item.title}>
-            <span className={`recommendation-icon rec-${index}`}><Sparkles size={18} /></span>
-            <div>
-              <small>{item.status}</small>
-              <strong>{item.title.replace("AI Recommendation For You", "AI Tools")}</strong>
-              <span>{item.description}</span>
-            </div>
-          </div>
-        ))}
+        <EmptyState title="No real recommendations loaded" description="Open Dashboard or AI Advisor to load recommendations from the API." />
       </div>
     </aside>
   );
@@ -650,7 +650,7 @@ export function GeneratedClipList({
     <section className="section-card">
       <SectionHeading title="Generated Clips" action="Preview All" />
       {clips.length === 0 ? (
-        <EmptyState title="No generated clips yet" description="Click Generate Clips to create demo clips from the selected source." />
+        <EmptyState title="No generated clips yet" description="Use Source Video to generate clips through the configured AI provider." />
       ) : (
         <div className="clip-list">
           {clips.map((clip, index) => (
@@ -680,7 +680,7 @@ export function FormGrid({ items }: { items: string[] }) {
       {items.map((item) => (
         <label key={item}>
           <span>{item}</span>
-          <input placeholder="Demo Data" />
+          <input placeholder="Enter value" />
         </label>
       ))}
     </div>
@@ -723,7 +723,7 @@ export function IconButton({ label, children, onClick }: { label: string; childr
 }
 
 export function DemoDataBadge() {
-  return <StatusBadge label="Demo Data" tone="blue" />;
+  return <StatusBadge label="REAL_API" tone="green" />;
 }
 
 export function NotConnectedBadge() {
@@ -768,6 +768,10 @@ function getStatusTone(status: string): StatusTone {
   if (status === "Draft" || status === "Paused") return "amber";
   if (status === "Failed") return "red";
   return "slate";
+}
+
+function sourceTypeTone(sourceType: string): StatusTone {
+  return sourceType === "REAL_API" ? "green" : sourceType === "CSV_IMPORT" || sourceType === "MANUAL" ? "cyan" : "slate";
 }
 
 function getPlatformKey(platform: string) {

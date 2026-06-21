@@ -6,6 +6,7 @@ Do not commit a real `.env` or `.env.local` file. Use `.env.example` as the safe
 
 - `NEXT_PUBLIC_APP_NAME`: Public app name shown by the UI. Default: `FVN AI Clipper`.
 - `NEXT_PUBLIC_APP_URL`: Public local or deployed app URL. Local example: `http://localhost:3000`.
+- `APP_DATA_MODE`: Use `real` by default. Use `demo` only when intentionally running manual demo seed/data flows.
 
 ## Database
 
@@ -76,13 +77,15 @@ These are server-side secrets. Do not expose them in client-side code. Settings 
 
 ## Feature flags
 
-- `NEXT_PUBLIC_ENABLE_DEMO_DATA`: Demo-only flag. Use `true` for local demo mode.
-- `NEXT_PUBLIC_ENABLE_REAL_API`: Use `false` until backend/API integrations are ready.
+- `NEXT_PUBLIC_ENABLE_DEMO_DATA`: Manual-only flag. Default `false`; set `true` only when intentionally using demo mode.
+- `NEXT_PUBLIC_ENABLE_REAL_API`: Default `true` so API/database/provider errors are shown instead of hidden.
 - `NEXT_PUBLIC_ENABLE_AUTO_POSTING`: Use `false` until real social posting is approved and connected.
 
 ## UI status behavior
 
-The frontend reads public feature flags and asks the local API for safe AI provider status. Secret provider keys are masked by the backend before they reach the browser.
+The frontend reads public feature flags and asks the local API for safe AI provider and connection status. Secret provider keys are masked by the backend before they reach the browser.
+
+Real mode does not fall back to seeded/sample records. If database/API/provider connectivity fails, API routes return `NOT_CONNECTED` or `FAILED` with a sanitized technical reason.
 
 ## Local redirect URI examples
 

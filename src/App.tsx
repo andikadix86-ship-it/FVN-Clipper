@@ -25,15 +25,8 @@ import {
   VideoOpportunityTable
 } from "./components";
 import {
-  campaigns,
-  defaultAccounts,
-  defaultContentItems,
-  defaultGeneratedClips,
-  defaultSchedules,
   navItems,
   niches,
-  opportunities,
-  stats
 } from "./data/ai-clipper-demo";
 import { aiProviderEnvStatus, environmentStatus, featureFlagEnvStatus, socialIntegrationEnvStatus } from "./env";
 import type { Account, Campaign, ContentItem, GeneratedClip, PageId, ScheduleItem, SubNavItem, VideoOpportunity } from "./types";
@@ -45,12 +38,15 @@ import {
   mapCampaign,
   mapOpportunity,
   mapSchedule,
+  type ApiAiGenerateResult,
   toApiPerformance,
   toApiPlatform,
   toApiStatus,
   type ApiAiProviderStatus,
   type ApiCampaign,
   type ApiCategory,
+  type ApiConnectionCheck,
+  type ApiConnectionStatus,
   type ApiCompetitor,
   type ApiOpportunity,
   type ApiPublishingSchedule,
@@ -67,7 +63,6 @@ import {
   clipStudioQualityOptions,
   clipStudioTargetPlatforms,
   detectSourcePlatform,
-  generateClipStudioPlan,
   resolveClipStudioMetadata,
   validateSourceVideoUrl,
   type ClipStudioClipResult,
@@ -90,7 +85,7 @@ type StatusFilter = "All" | ContentItem["status"] | "Paused";
 type PerformanceFilter = "All" | "High" | "Medium" | "Low";
 type ViewMode = "grid" | "list";
 
-interface DemoFilterState {
+interface DataFilterState {
   keyword: string;
   category: string;
   platform: PlatformFilter;
@@ -100,9 +95,9 @@ interface DemoFilterState {
   campaign: string;
 }
 
-const defaultDemoFilters: DemoFilterState = {
+const defaultDataFilters: DataFilterState = {
   keyword: "",
-  category: "Demo Data",
+  category: "All",
   platform: "All",
   status: "All",
   date: "",
@@ -119,21 +114,21 @@ export function App() {
   const [selectedSource, setSelectedSource] = useState<VideoOpportunity | null>(() => readSelectedSource());
   const [savedOpportunities, setSavedOpportunities] = usePersistentState<VideoOpportunity[]>(SAVED_OPPORTUNITIES_KEY, []);
   const [generatedClips, setGeneratedClips] = usePersistentState<GeneratedClip[]>(GENERATED_CLIPS_KEY, []);
-  const [contentLibrary, setContentLibrary] = usePersistentState<ContentItem[]>(CONTENT_ITEMS_KEY, defaultContentItems);
-  const [campaignList, setCampaignList] = usePersistentState<Campaign[]>(CAMPAIGNS_KEY, campaigns);
-  const [scheduleList, setScheduleList] = usePersistentState<ScheduleItem[]>(SCHEDULES_KEY, defaultSchedules);
-  const [accountList, setAccountList] = usePersistentState<Account[]>(ACCOUNTS_KEY, defaultAccounts);
+  const [contentLibrary, setContentLibrary] = usePersistentState<ContentItem[]>(CONTENT_ITEMS_KEY, []);
+  const [campaignList, setCampaignList] = usePersistentState<Campaign[]>(CAMPAIGNS_KEY, []);
+  const [scheduleList, setScheduleList] = usePersistentState<ScheduleItem[]>(SCHEDULES_KEY, []);
+  const [accountList, setAccountList] = usePersistentState<Account[]>(ACCOUNTS_KEY, []);
   const [approvalStatus, setApprovalStatus] = usePersistentState<"Pending" | "Approved" | "Rejected">(APPROVAL_STATUS_KEY, "Pending");
-  const [opportunityList, setOpportunityList] = useState<VideoOpportunity[]>(opportunities);
+  const [opportunityList, setOpportunityList] = useState<VideoOpportunity[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [lastScanned, setLastScanned] = useState("Not scanned yet");
-  const [scanSummary, setScanSummary] = useState<string[]>(["New opportunities found: 0", "Best niche: Demo Data", "Best platform: Demo Data", "Average clipping score: 0"]);
+  const [scanSummary, setScanSummary] = useState<string[]>(["New opportunities found: 0", "Best niche: NOT_CONNECTED", "Best platform: NOT_CONNECTED", "Average clipping score: 0"]);
   const [analysisTarget, setAnalysisTarget] = useState<VideoOpportunity | null>(null);
   const [addAccountOpen, setAddAccountOpen] = useState(false);
   const [accountPlatform, setAccountPlatform] = useState("YouTube");
   const [accountName, setAccountName] = useState("");
   const [accountHandle, setAccountHandle] = useState("");
-  const [connectionMode, setConnectionMode] = useState<"Demo Connect" | "OAuth Placeholder">("Demo Connect");
+  const [connectionMode, setConnectionMode] = useState<"OAuth Placeholder">("OAuth Placeholder");
   const [toast, setToast] = useState("UI ready");
 
   const activeNav = useMemo(() => navItems.find((item) => item.id === activePage) ?? navItems[0], [activePage]);
@@ -150,7 +145,7 @@ export function App() {
   }, []);
 
   const showToast = (message: string) => {
-    console.log(`[FVN demo action] ${message}`);
+    console.log(`[FVN action] ${message}`);
     setToast(message);
   };
 
@@ -195,13 +190,13 @@ export function App() {
     setIsScanning(true);
     setTimeout(() => {
       const sorted = [...opportunityList].sort((a, b) => b.clippingScore - a.clippingScore);
-      const average = Math.round(sorted.reduce((total, item) => total + item.clippingScore, 0) / sorted.length);
+      const average = sorted.length ? Math.round(sorted.reduce((total, item) => total + item.clippingScore, 0) / sorted.length) : 0;
       setOpportunityList(sorted);
       setLastScanned(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
       setScanSummary([
         `New opportunities found: ${sorted.length}`,
-        `Best niche: ${sorted[0]?.niche ?? "Demo Data"}`,
-        `Best platform: ${sorted[0]?.platform ?? "Demo Data"}`,
+        `Best niche: ${sorted[0]?.niche ?? "NOT_CONNECTED"}`,
+        `Best platform: ${sorted[0]?.platform ?? "NOT_CONNECTED"}`,
         `Average clipping score: ${average}`
       ]);
       setIsScanning(false);
@@ -209,17 +204,9 @@ export function App() {
     }, 900);
   };
 
-  const generateDemoClips = () => {
-    const sourceTitle = selectedSource?.title ?? "Manual source video";
-    const clips = defaultGeneratedClips.map((clip, index) => ({
-      ...clip,
-      id: `${Date.now()}-${index}`,
-      sourceTitle,
-      status: index === 0 ? ("Ready" as const) : ("Draft" as const)
-    }));
-    setGeneratedClips(clips);
-    navigate("/clip-studio/ai-clip-generator");
-    showToast(`Generated ${clips.length} demo clips`);
+  const generateRealClips = () => {
+    navigate("/clip-studio/source-video");
+    showToast("Use Source Video to generate clips through the configured AI provider.");
   };
 
   const saveClipToLibrary = (clip: GeneratedClip) => {
@@ -234,7 +221,7 @@ export function App() {
           title: clip.title,
           category: selectedSource?.niche ?? "AI",
           platform: selectedSource?.platform ?? "TikTok",
-          campaign: "Demo Data",
+          campaign: selectedSource?.campaignSlug ?? "Unassigned",
           status: "Ready",
           metric: `${clip.viralScore} viral score`,
           date: "2026-06-18",
@@ -249,12 +236,12 @@ export function App() {
   const saveClipToCampaign = (clip: GeneratedClip) => {
     setGeneratedClips((current) => current.map((item) => (item.id === clip.id ? { ...item, status: "Saved to Campaign" } : item)));
     setCampaignList((current) => {
-      if (current.some((campaign) => campaign.name === "Demo Clip Draft Campaign")) {
+      if (current.some((campaign) => campaign.name === "Clip Draft Campaign")) {
         return current;
       }
       return [
         {
-          name: "Demo Clip Draft Campaign",
+          name: "Clip Draft Campaign",
           platform: selectedSource?.platform ?? "TikTok",
           start: "Draft",
           end: "Draft",
@@ -269,7 +256,7 @@ export function App() {
   };
 
   const addCampaignDraft = () => {
-    const draftName = `Demo Campaign Draft ${campaignList.length + 1}`;
+    const draftName = `Manual Campaign Draft ${campaignList.length + 1}`;
     setCampaignList((current) => [
       {
         name: draftName,
@@ -312,8 +299,8 @@ export function App() {
           ? {
               ...item,
               status: item.status === "Connected" ? "Not Connected" : "Connected",
-              health: item.status === "Connected" ? "Manually disconnected" : "Demo connection active",
-              lastSync: item.status === "Connected" ? "Never" : "Just now"
+              health: item.status === "Connected" ? "Manually disconnected" : "OAuth flow required before reconnect.",
+              lastSync: "Never"
             }
           : item
       )
@@ -327,22 +314,21 @@ export function App() {
   };
 
   const connectAccountFromModal = () => {
-    const name = accountName.trim() || `${accountPlatform} Demo`;
-    const status = connectionMode === "Demo Connect" ? "Connected" : "Not Connected";
+    const name = accountName.trim() || `${accountPlatform} Account`;
     setAccountList((current) => [
       {
         name,
         platform: accountPlatform,
-        status,
-        health: connectionMode === "Demo Connect" ? `Demo connected ${accountHandle || "account"}` : "OAuth placeholder not configured",
-        lastSync: connectionMode === "Demo Connect" ? "Just now" : "Never"
+        status: "Not Connected",
+        health: accountHandle ? `OAuth required for ${accountHandle}` : "OAuth access token not connected.",
+        lastSync: "Never"
       },
       ...current
     ]);
     setAddAccountOpen(false);
     setAccountName("");
     setAccountHandle("");
-    showToast(connectionMode === "Demo Connect" ? "Account connected" : "OAuth is not configured yet");
+    showToast("OAuth is not configured yet");
   };
 
   const updateApprovalStatus = (status: "Pending" | "Approved" | "Rejected") => {
@@ -395,7 +381,7 @@ export function App() {
               onAnalyze={analyzeOpportunity}
               onAddCampaignDraft={addCampaignDraft}
               onClip={clipVideo}
-              onGenerateClips={generateDemoClips}
+              onGenerateClips={generateRealClips}
               onNavigate={navigate}
               onOpenAddAccount={() => setAddAccountOpen(true)}
               onRefreshAccount={refreshAccount}
@@ -560,17 +546,12 @@ function Dashboard({
   const campaignState = useApiResource<ApiCampaign[]>("/api/dashboard/campaigns", activeSub.key === "overview" || activeSub.key === "campaign-overview");
   const calendarState = useApiResource<ApiPublishingSchedule[]>("/api/dashboard/publishing-calendar", activeSub.key === "overview" || activeSub.key === "publishing-calendar-preview");
   const topOpportunityState = useApiResource<ApiOpportunity[]>(buildOpportunityUrl({ limit: 20, sort: "opportunityScore_desc" }), activeSub.key === "overview");
-  const isDashboardDemoMode =
-    isDemoModeData(overview.data) ||
-    isDemoModeData(recommendationState.data) ||
-    isDemoModeData(campaignState.data) ||
-    isDemoModeData(calendarState.data) ||
-    isDemoModeData(topOpportunityState.data);
+  const connectionState = useApiResource<ApiConnectionStatus>("/api/connections/status", activeSub.key === "overview");
 
   if (activeSub.key === "ai-recommendation-today") {
     return (
       <>
-        <DashboardHero demoMode={isDashboardDemoMode} />
+        <DashboardHero />
         <ApiStateView state={recommendationState} emptyTitle="No recommendations yet" emptyDescription="Database returned no AI Recommendation Today records.">
           {(items) => (
             <section className="section-card">
@@ -588,7 +569,7 @@ function Dashboard({
 
     return (
       <>
-        <DashboardHero demoMode={isDashboardDemoMode} />
+        <DashboardHero />
         <ApiStateView state={campaignState} emptyTitle="No campaigns found" emptyDescription="Database returned no campaign records.">
           {() => (
             <section className="section-card">
@@ -610,7 +591,7 @@ function Dashboard({
 
     return (
       <>
-        <DashboardHero demoMode={isDashboardDemoMode} />
+        <DashboardHero />
         <ApiStateView state={calendarState} emptyTitle="No publishing schedules found" emptyDescription="Database returned no calendar records.">
           {() => (
             <>
@@ -635,8 +616,8 @@ function Dashboard({
         <DashboardOverviewLayout
           calendarState={calendarState}
           campaignState={campaignState}
+          connectionState={connectionState}
           data={data}
-          demoMode={isDashboardDemoMode}
           onNavigate={onNavigate}
           recommendationState={recommendationState}
           topOpportunityState={topOpportunityState}
@@ -646,34 +627,21 @@ function Dashboard({
   );
 }
 
-function DashboardHero({ demoMode = false }: { demoMode?: boolean }) {
+function DashboardHero() {
   return (
     <section className="dashboard-hero">
       <div>
         <div className="dashboard-title-row">
           <h1>Dashboard Overview</h1>
-          {demoMode && <StatusBadge label="DEMO MODE - Database belum terhubung" tone="blue" />}
+          <StatusBadge label="REAL DATA MODE" tone="green" />
         </div>
-        <p>Welcome back. Here's what's happening with your content empire today.</p>
+        <p>Connection failures are shown directly. No fallback records are used in real mode.</p>
       </div>
       <button className="date-button" type="button">
         Friday, 19 Jun 2026
       </button>
     </section>
   );
-}
-
-function isDemoModeData(data: unknown): boolean {
-  if (Array.isArray(data)) {
-    return data.some((item) => isDemoModeData(item));
-  }
-
-  if (data && typeof data === "object") {
-    const record = data as { mode?: string; sourceType?: string };
-    return record.mode === "DEMO" || record.sourceType === "DEMO";
-  }
-
-  return false;
 }
 
 function DashboardSchedule({ schedules }: { schedules: ScheduleItem[] }) {
@@ -691,7 +659,7 @@ function DashboardSchedule({ schedules }: { schedules: ScheduleItem[] }) {
             <small>{schedule.account}</small>
           </span>
           <span className="schedule-day">Today</span>
-          {schedule.sourceType && <StatusBadge label={schedule.sourceType} tone={schedule.sourceType === "DEMO" ? "blue" : "slate"} />}
+          {schedule.sourceType && <StatusBadge label={schedule.sourceType} tone={sourceTypeTone(schedule.sourceType)} />}
         </div>
       ))}
     </div>
@@ -718,7 +686,7 @@ function TopClipRow({ item, index, onClip }: { item: VideoOpportunity; index: nu
         <small>Eng.</small>
         <strong>{item.engagement}</strong>
       </div>
-      {item.sourceType && <StatusBadge label={item.sourceType} tone={item.sourceType === "DEMO" ? "blue" : "slate"} />}
+      {item.sourceType && <StatusBadge label={item.sourceType} tone={sourceTypeTone(item.sourceType)} />}
       <button className="primary-button compact" type="button" onClick={() => onClip(item)}>Clip</button>
     </article>
   );
@@ -745,8 +713,8 @@ function AIClipIntelligence({
   onRunAIScan: () => void;
   onSave: (item: VideoOpportunity) => void | Promise<void>;
 }) {
-  const [showDemoFilters, setShowDemoFilters] = useState(true);
-  const [filters, setFilters] = useState<DemoFilterState>(defaultDemoFilters);
+  const [showDataFilters, setShowDataFilters] = useState(true);
+  const [filters, setFilters] = useState<DataFilterState>(defaultDataFilters);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const categoryState = useApiResource<ApiCategory[]>("/api/ai-clip-intelligence/categories", true);
   const campaignState = useApiResource<ApiCampaign[]>("/api/dashboard/campaigns", true);
@@ -777,12 +745,12 @@ function AIClipIntelligence({
   const opportunityState = useApiResource<ApiOpportunity[]>(opportunityUrl, activeSub.key !== "competitor-intelligence" && activeSub.key !== "ai-advisor");
   const mappedOpportunities = useMemo(() => (opportunityState.data ?? []).map(mapOpportunity), [opportunityState.data]);
 
-  const updateFilter = <K extends keyof DemoFilterState>(key: K, value: DemoFilterState[K]) => {
+  const updateFilter = <K extends keyof DataFilterState>(key: K, value: DataFilterState[K]) => {
     setFilters((current) => ({ ...current, [key]: value }));
   };
 
   const resetFilters = () => {
-    setFilters(defaultDemoFilters);
+    setFilters(defaultDataFilters);
     setViewMode("grid");
   };
 
@@ -804,10 +772,10 @@ function AIClipIntelligence({
           campaignOptions={campaignState.data ?? []}
           categoryOptions={categoryState.data ?? []}
           filters={filters}
-          showDemoFilters={showDemoFilters}
+          showDataFilters={showDataFilters}
           viewMode={viewMode}
           onReset={resetFilters}
-          onToggle={() => setShowDemoFilters((value) => !value)}
+          onToggle={() => setShowDataFilters((value) => !value)}
           onUpdate={updateFilter}
           onViewModeChange={setViewMode}
         />
@@ -966,7 +934,7 @@ function ClipStudio({
       {selectedSource && (
         <section className="section-card selected-source">
           <StatusBadge label="Selected Source" tone="blue" />
-          <StatusBadge label="Demo Data" tone="slate" />
+          {selectedSource.sourceType && <StatusBadge label={selectedSource.sourceType} tone={selectedSource.sourceType === "REAL_API" ? "green" : "slate"} />}
           <h3>{selectedSource.title}</h3>
           <p>{selectedSource.channel} - {selectedSource.platform} - {selectedSource.views} views</p>
         </section>
@@ -1032,8 +1000,8 @@ function ContentLibrary({
   onArchiveContent: (item: ContentItem) => void;
   onScheduleContent: (item: ContentItem) => void;
 }) {
-  const [showDemoFilters, setShowDemoFilters] = useState(true);
-  const [filters, setFilters] = useState<DemoFilterState>(defaultDemoFilters);
+  const [showDataFilters, setShowDataFilters] = useState(true);
+  const [filters, setFilters] = useState<DataFilterState>(defaultDataFilters);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const categoryState = useApiResource<ApiCategory[]>("/api/ai-clip-intelligence/categories", true);
   const campaignOptions = useMemo(() => ["All", ...Array.from(new Set(contentItems.map((item) => item.campaign)))], [contentItems]);
@@ -1044,7 +1012,7 @@ function ContentLibrary({
       const itemPerformance = getContentPerformance(item);
       const searchable = [item.title, item.category, item.platform, item.status, item.campaign, item.metric].join(" ").toLowerCase();
       const matchesKeyword = !keyword || searchable.includes(keyword);
-      const matchesCategory = filters.category === "Demo Data" || item.category === filters.category;
+      const matchesCategory = filters.category === "All" || item.category === filters.category;
       const matchesPlatform = filters.platform === "All" || item.platform === filters.platform;
       const matchesStatus = filters.status === "All" || item.status === filters.status;
       const matchesDate = !filters.date || item.date === filters.date;
@@ -1055,12 +1023,12 @@ function ContentLibrary({
     });
   }, [contentItems, filters]);
 
-  const updateFilter = <K extends keyof DemoFilterState>(key: K, value: DemoFilterState[K]) => {
+  const updateFilter = <K extends keyof DataFilterState>(key: K, value: DataFilterState[K]) => {
     setFilters((current) => ({ ...current, [key]: value }));
   };
 
   const resetFilters = () => {
-    setFilters(defaultDemoFilters);
+    setFilters(defaultDataFilters);
     setViewMode("grid");
   };
 
@@ -1076,10 +1044,10 @@ function ContentLibrary({
         campaignOptions={campaignOptions}
         categoryOptions={(categoryState.data ?? []).map((category) => category.name)}
         filters={filters}
-        showDemoFilters={showDemoFilters}
+        showDataFilters={showDataFilters}
         viewMode={viewMode}
         onReset={resetFilters}
-        onToggle={() => setShowDemoFilters((value) => !value)}
+        onToggle={() => setShowDataFilters((value) => !value)}
         onUpdate={updateFilter}
         onViewModeChange={setViewMode}
       />
@@ -1232,11 +1200,11 @@ function ApiStateViewObject<T>({
 
 function DashboardMetricGrid({ data, recommendationCount }: { data: DashboardOverviewData; recommendationCount?: number }) {
   const dashboardStats = [
-    { label: "Total Projects", value: String(data.totals.campaigns + data.totals.opportunities), delta: "Database records", tone: "blue" as const },
-    { label: "AI Recommendations Today", value: String(recommendationCount ?? data.latestRecommendations.length), delta: "Latest database advice", tone: "cyan" as const },
-    { label: "Active Campaigns", value: String(data.totals.campaigns), delta: "Campaign overview", tone: "slate" as const },
-    { label: "Scheduled Posts", value: String(data.totals.scheduledPosts), delta: "Publishing calendar", tone: "amber" as const },
-    { label: "Saved Opportunities", value: String(data.totals.savedOpportunities), delta: "Saved opportunities", tone: "green" as const }
+    { label: "Total Projects", value: String(data.totals.campaigns + data.totals.opportunities), delta: "REAL_API records", tone: "blue" as const },
+    { label: "AI Recommendations Today", value: String(recommendationCount ?? data.latestRecommendations.length), delta: "Latest real advice", tone: "cyan" as const },
+    { label: "Active Campaigns", value: String(data.totals.campaigns), delta: "Campaign records", tone: "slate" as const },
+    { label: "Scheduled Posts", value: String(data.totals.scheduledPosts), delta: "Publishing records", tone: "amber" as const },
+    { label: "Saved Opportunities", value: String(data.totals.savedOpportunities), delta: "Saved real opportunities", tone: "green" as const }
   ];
 
   return (
@@ -1248,19 +1216,76 @@ function DashboardMetricGrid({ data, recommendationCount }: { data: DashboardOve
   );
 }
 
+function ConnectionStatusPanel({ state }: { state: ApiResourceState<ApiConnectionStatus> }) {
+  if (state.loading) {
+    return <EmptyState title="Checking real connections..." description="Testing database, AI provider, video source, social, and marketplace integrations." />;
+  }
+
+  if (state.error) {
+    return <EmptyState title="Unable to validate real connections" description={state.error} />;
+  }
+
+  const checks = state.data?.checks ?? [];
+
+  return (
+    <section className="section-card" data-testid="connection-status-panel">
+      <SectionTitle title="Real Source Connections" action="Refresh" onAction={state.reload} />
+      <p className="muted env-description">Live connection checks use project `.env` values. Secrets are masked before reaching the UI.</p>
+      {checks.length === 0 ? (
+        <EmptyState title="No connection checks available" description="Connection status endpoint returned no provider checks." />
+      ) : (
+        <div className="env-status-grid">
+          {checks.map((check) => (
+            <ConnectionStatusCard check={check} key={check.id} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ConnectionStatusCard({ check }: { check: ApiConnectionCheck }) {
+  return (
+    <article className="env-status-card">
+      <div className="row between gap">
+        <strong>{check.label}</strong>
+        <StatusBadge label={check.status} tone={connectionStatusTone(check.status)} />
+      </div>
+      <p>{check.technicalReason}</p>
+      <div className="tag-cloud">
+        <StatusBadge label={check.sourceType} tone="green" />
+        <StatusBadge label={check.provider} tone="slate" />
+        <StatusBadge label={check.kind} tone="cyan" />
+        {typeof check.latencyMs === "number" && <StatusBadge label={`${check.latencyMs}ms`} tone="slate" />}
+      </div>
+    </article>
+  );
+}
+
+function connectionStatusTone(status: ApiConnectionCheck["status"]) {
+  if (status === "CONNECTED") return "green";
+  if (status === "NOT_CONNECTED") return "amber";
+  if (status === "UNSUPPORTED") return "slate";
+  return "red";
+}
+
+function sourceTypeTone(sourceType: string) {
+  return sourceType === "REAL_API" ? "green" : sourceType === "CSV_IMPORT" || sourceType === "MANUAL" ? "cyan" : "slate";
+}
+
 function DashboardOverviewLayout({
   calendarState,
   campaignState,
+  connectionState,
   data,
-  demoMode,
   onNavigate,
   recommendationState,
   topOpportunityState
 }: {
   calendarState: ApiResourceState<ApiPublishingSchedule[]>;
   campaignState: ApiResourceState<ApiCampaign[]>;
+  connectionState: ApiResourceState<ApiConnectionStatus>;
   data: DashboardOverviewData;
-  demoMode: boolean;
   onNavigate: (path: string) => void;
   recommendationState: ApiResourceState<ApiRecommendation[]>;
   topOpportunityState: ApiResourceState<ApiOpportunity[]>;
@@ -1270,9 +1295,11 @@ function DashboardOverviewLayout({
   return (
     <div className="dashboard-page">
       <section className="dashboard-top-section">
-        <DashboardHero demoMode={demoMode} />
+        <DashboardHero />
         <DashboardMetricGrid data={data} recommendationCount={recommendationState.data?.length} />
       </section>
+
+      <ConnectionStatusPanel state={connectionState} />
 
       <section className="dashboard-middle-grid">
         <DashboardPanel className="dashboard-panel-recommendations" title="AI Recommendation Today" action="View All" onAction={() => onNavigate("/dashboard/ai-recommendation-today")}>
@@ -1368,7 +1395,7 @@ function PublishingPreviewPanel({ schedules }: { schedules: ScheduleItem[] }) {
             <strong>{schedule.title}</strong>
             <span>{schedule.day} - {schedule.status}</span>
           </div>
-          {schedule.sourceType && <StatusBadge label={schedule.sourceType} tone={schedule.sourceType === "DEMO" ? "blue" : "slate"} />}
+          {schedule.sourceType && <StatusBadge label={schedule.sourceType} tone={sourceTypeTone(schedule.sourceType)} />}
         </article>
       ))}
     </div>
@@ -1387,7 +1414,7 @@ function TopOpportunityRanking({ items }: { items: VideoOpportunity[] }) {
           </div>
           <strong>{item.opportunityScore ?? item.clippingScore}</strong>
           <div className="rank-progress"><span style={{ width: `${item.opportunityScore ?? item.clippingScore}%` }} /></div>
-          {item.sourceType && <StatusBadge label={item.sourceType} tone={item.sourceType === "DEMO" ? "blue" : "slate"} />}
+          {item.sourceType && <StatusBadge label={item.sourceType} tone={sourceTypeTone(item.sourceType)} />}
         </article>
       ))}
     </div>
@@ -1429,7 +1456,7 @@ function RecommendationList({ items }: { items: ApiRecommendation[] }) {
     <div className="recommendation-panel">
       {items.map((item) => (
         <article className="recommendation-row" key={item.id}>
-          <StatusBadge label={item.sourceType} tone={item.sourceType === "DEMO" ? "blue" : "slate"} />
+          <StatusBadge label={item.sourceType} tone={sourceTypeTone(item.sourceType)} />
           <div>
             <small>{item.priority} - {formatEnumLabel(item.recommendationType)}</small>
             <strong>{item.title}</strong>
@@ -1446,7 +1473,7 @@ function OpportunityFilterPanel({
   campaignOptions,
   categoryOptions,
   filters,
-  showDemoFilters,
+  showDataFilters,
   viewMode,
   onReset,
   onToggle,
@@ -1455,24 +1482,24 @@ function OpportunityFilterPanel({
 }: {
   campaignOptions: ApiCampaign[];
   categoryOptions: ApiCategory[];
-  filters: DemoFilterState;
-  showDemoFilters: boolean;
+  filters: DataFilterState;
+  showDataFilters: boolean;
   viewMode: ViewMode;
   onReset: () => void;
   onToggle: () => void;
-  onUpdate: <K extends keyof DemoFilterState>(key: K, value: DemoFilterState[K]) => void;
+  onUpdate: <K extends keyof DataFilterState>(key: K, value: DataFilterState[K]) => void;
   onViewModeChange: (mode: ViewMode) => void;
 }) {
   return (
     <section className="section-card demo-filter-card">
       <div className="section-title">
-        <h2>Demo filters</h2>
+        <h2>Real data filters</h2>
         <div className="row wrap">
-          <button className="secondary-button compact" type="button" onClick={onToggle}>{showDemoFilters ? "Hide Demo Filters" : "Show Demo Filters"}</button>
+          <button className="secondary-button compact" type="button" onClick={onToggle}>{showDataFilters ? "Hide Filters" : "Show Filters"}</button>
           <button className="ghost-button compact" type="button" onClick={onReset}>Reset Filters</button>
         </div>
       </div>
-      {showDemoFilters && (
+      {showDataFilters && (
         <div className="demo-filter-grid">
           <label>
             <span>Keyword</span>
@@ -1481,7 +1508,7 @@ function OpportunityFilterPanel({
           <label>
             <span>Category</span>
             <select value={filters.category} onChange={(event) => onUpdate("category", event.target.value)}>
-              <option value="Demo Data">Demo Data</option>
+              <option value="All">All</option>
               {categoryOptions.map((item) => (
                 <option value={item.slug} key={item.id}>{item.name}</option>
               ))}
@@ -1607,7 +1634,7 @@ function CompetitorResults({ items }: { items: ApiCompetitor[] }) {
         <section className="section-card" key={item.id}>
           <SectionTitle title={item.name} />
           <div className="tag-cloud">
-            <StatusBadge label={item.sourceType} tone={item.sourceType === "DEMO" ? "blue" : "slate"} />
+            <StatusBadge label={item.sourceType} tone={sourceTypeTone(item.sourceType)} />
             <StatusBadge label={formatEnumLabel(item.platform)} tone="cyan" />
             <StatusBadge label={item.niche} tone="slate" />
           </div>
@@ -1636,7 +1663,7 @@ function DemoFilterPanel({
   campaignOptions,
   categoryOptions,
   filters,
-  showDemoFilters,
+  showDataFilters,
   viewMode,
   onReset,
   onToggle,
@@ -1645,26 +1672,26 @@ function DemoFilterPanel({
 }: {
   campaignOptions: string[];
   categoryOptions: string[];
-  filters: DemoFilterState;
-  showDemoFilters: boolean;
+  filters: DataFilterState;
+  showDataFilters: boolean;
   viewMode: ViewMode;
   onReset: () => void;
   onToggle: () => void;
-  onUpdate: <K extends keyof DemoFilterState>(key: K, value: DemoFilterState[K]) => void;
+  onUpdate: <K extends keyof DataFilterState>(key: K, value: DataFilterState[K]) => void;
   onViewModeChange: (mode: ViewMode) => void;
 }) {
   return (
     <section className="section-card demo-filter-card">
       <div className="section-title">
-        <h2>Demo filters</h2>
+        <h2>Real data filters</h2>
         <div className="row wrap">
           <button className="secondary-button compact" type="button" onClick={onToggle}>
-            {showDemoFilters ? "Hide Demo Filters" : "Show Demo Filters"}
+            {showDataFilters ? "Hide Filters" : "Show Filters"}
           </button>
           <button className="ghost-button compact" type="button" onClick={onReset}>Reset Filters</button>
         </div>
       </div>
-      {showDemoFilters && (
+      {showDataFilters && (
         <div className="demo-filter-grid">
           <label>
             <span>Keyword</span>
@@ -1673,7 +1700,7 @@ function DemoFilterPanel({
           <label>
             <span>Category</span>
             <select value={filters.category} onChange={(event) => onUpdate("category", event.target.value)}>
-              {["Demo Data", ...categoryOptions.filter((item) => item !== "Demo Data")].map((item) => (
+              {["All", ...categoryOptions.filter((item) => item !== "All")].map((item) => (
                 <option value={item} key={item}>{item}</option>
               ))}
             </select>
@@ -1819,7 +1846,7 @@ function ClipStudioContent({
       <div className="content-grid">
         {["TikTok format", "Instagram Reels", "YouTube Shorts", "Facebook Reels", "Custom export", "Save to Campaign", "Save to Library"].map((item) => (
           <article className="mini-stat" key={item}>
-            <StatusBadge label="Demo Data" tone="blue" />
+            <StatusBadge label="REAL_API" tone="green" />
             <span>{item}</span>
             <button className="primary-button compact" type="button">Export</button>
           </article>
@@ -1837,7 +1864,7 @@ function ClipStudioSourceVideoPanel({
   onSaveClipToLibrary: (clip: GeneratedClip) => void;
 }) {
   const selectedSourceUrl = useMemo(() => {
-    if (!selectedSource) return "https://www.youtube.com/watch?v=xxxxxxxxxxx";
+    if (!selectedSource) return "";
     return `https://www.youtube.com/watch?v=${encodeURIComponent(selectedSource.slug ?? selectedSource.id)}`;
   }, [selectedSource]);
   const [sourceVideoUrl, setSourceVideoUrl] = useState(selectedSourceUrl);
@@ -1892,7 +1919,7 @@ function ClipStudioSourceVideoPanel({
         const nextMetadata = resolveClipStudioMetadata(sourceVideoUrl, sourceDurationMinutes);
         setMetadata(nextMetadata);
         setWorkflowStatus("analyzed");
-        setNotice(`DEMO fallback: ${nextMetadata.sourcePlatform} source siap dianalisis. Transcript/API real belum aktif, tetapi flow generate memakai struktur produksi.`);
+        setNotice(`${nextMetadata.sourcePlatform} source metadata siap. Generate memakai AI provider yang dikonfigurasi di backend.`);
       } catch (error) {
         setMetadata(null);
         setWorkflowStatus("error");
@@ -1901,7 +1928,7 @@ function ClipStudioSourceVideoPanel({
     }, 220);
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!canGenerate) {
       setWorkflowStatus("error");
       setNotice(sourceUrlError || durationError || countError || "Klik Analyze Source sebelum Generate Viral Clips.");
@@ -1910,27 +1937,38 @@ function ClipStudioSourceVideoPanel({
 
     setWorkflowStatus("generating");
     setNotice("Generating viral clip recommendations...");
-    window.setTimeout(() => {
-      try {
-        const plan = generateClipStudioPlan({
-          sourceVideoUrl,
-          sourceDurationMinutes,
-          clipCount,
-          videoQuality,
-          targetPlatform,
-          promptMode: "clip_studio_structured_json",
-          contentGoal: "Generate clip viral lengkap dengan timing, caption, hashtag, CTA, dan action target.",
-          language: "id"
-        });
-        setMetadata(plan.metadata);
-        setClips(plan.clips);
-        setWorkflowStatus("success");
-        setNotice(`DEMO fallback: ${plan.clips.length} rekomendasi clip viral dibuat dari ${plan.metadata.sourcePlatform}.`);
-      } catch (error) {
-        setWorkflowStatus("error");
-        setNotice(error instanceof Error ? error.message : "Generate viral clips gagal.");
-      }
-    }, 240);
+    try {
+      const currentMetadata = metadata ?? resolveClipStudioMetadata(sourceVideoUrl, sourceDurationMinutes);
+      const payload = {
+        sourceVideoUrl,
+        sourceDurationMinutes,
+        clipCount,
+        videoQuality,
+        targetPlatform,
+        promptMode: "clip_studio_structured_json",
+        contentGoal: "Generate clip viral lengkap dengan timing, caption, hashtag, CTA, dan action target.",
+        language: "id" as const
+      };
+      const result = await fetchApiData<ApiAiGenerateResult>("/api/ai/generate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          feature: "clip-studio",
+          clipStudio: {
+            payload,
+            metadata: currentMetadata
+          }
+        })
+      });
+      const aiClips = parseClipStudioAiClips(result.output, payload, currentMetadata);
+      setMetadata(currentMetadata);
+      setClips(aiClips);
+      setWorkflowStatus("success");
+      setNotice(`${aiClips.length} rekomendasi clip viral dibuat oleh ${result.provider}/${result.model}.`);
+    } catch (error) {
+      setWorkflowStatus("error");
+      setNotice(error instanceof Error ? error.message : "Generate viral clips gagal.");
+    }
   };
 
   const handleEdit = (clip: ClipStudioClipResult) => {
@@ -1939,7 +1977,7 @@ function ClipStudioSourceVideoPanel({
   };
 
   const handleSubtitle = (clip: ClipStudioClipResult) => {
-    setNotice(`Subtitle demo siap dibuat untuk ${clip.title}. Buka Subtitle Studio untuk styling dan translate.`);
+    setNotice(`Subtitle siap dibuat untuk ${clip.title}. Buka Subtitle Studio untuk styling dan translate.`);
   };
 
   const handleSave = (clip: ClipStudioClipResult) => {
@@ -1962,7 +2000,7 @@ function ClipStudioSourceVideoPanel({
             <h2>Source Video</h2>
             <span>Analyze one long source, then generate viral short clips.</span>
           </div>
-          <StatusBadge label="DEMO fallback" tone="blue" />
+          <StatusBadge label="REAL SOURCE" tone="green" />
         </div>
 
         <div className="clip-studio-source-types" aria-label="Supported source types">
@@ -1993,7 +2031,7 @@ function ClipStudioSourceVideoPanel({
         </label>
 
         <label className="clip-studio-field">
-          <span>Durasi metadata demo (menit)</span>
+          <span>Durasi metadata (menit)</span>
           <input
             data-testid="clip-studio-duration"
             type="number"
@@ -2021,7 +2059,7 @@ function ClipStudioSourceVideoPanel({
             </div>
             <div>
               <span>Analysis mode</span>
-              <strong>DEMO transcript fallback</strong>
+              <strong>AI provider required for transcript</strong>
             </div>
           </div>
         )}
@@ -2083,7 +2121,7 @@ function ClipStudioSourceVideoPanel({
             <h2>Viral Clip Recommendations</h2>
             <span>{clips.length ? `${clips.length} clip siap review` : "Analyze source, then generate 1, 3, 5, or 10 clips"}</span>
           </div>
-          {clips.length > 0 && <StatusBadge label="DEMO results" tone="blue" />}
+          {clips.length > 0 && <StatusBadge label="AI results" tone="green" />}
         </div>
         {clips.length ? (
           <div className="clip-studio-preview-grid viral-results">
@@ -2154,6 +2192,117 @@ function toGeneratedClip(clip: ClipStudioClipResult, sourceTitle: string): Gener
   };
 }
 
+function parseClipStudioAiClips(
+  output: string,
+  payload: {
+    sourceVideoUrl: string;
+    clipCount: number;
+    videoQuality: ClipStudioVideoQuality;
+    targetPlatform: ClipStudioTargetPlatform;
+  },
+  metadata: ClipStudioVideoMetadata
+): ClipStudioClipResult[] {
+  const parsed = parseJsonObject(output);
+  const record = parsed as { clips?: unknown; recommendations?: unknown };
+  const rawClips = Array.isArray(parsed) ? parsed : Array.isArray(record.clips) ? record.clips : Array.isArray(record.recommendations) ? record.recommendations : undefined;
+
+  if (!rawClips?.length) {
+    throw new Error("AI provider returned unsupported Clip Studio JSON format: missing clips array.");
+  }
+
+  return rawClips.slice(0, payload.clipCount).map((rawClip, index) => {
+    const clip = rawClip as Record<string, unknown>;
+    const title = stringField(clip, "title");
+    const duration = stringField(clip, "duration");
+    const startTime = stringField(clip, "startTime", "start_time");
+    const endTime = stringField(clip, "endTime", "end_time");
+    const hook = stringField(clip, "hook");
+    const angle = stringField(clip, "angle");
+    const category = stringField(clip, "category");
+    const caption = stringField(clip, "caption");
+    const cta = stringField(clip, "cta");
+    const viralScore = numberField(clip, "viralScore", "viral_score", "score");
+    const hashtags = arrayField(clip, "suggestedHashtags", "suggested_hashtags", "hashtags");
+
+    return {
+      id: optionalStringField(clip, "id", "clipId", "clip_id") || `ai-clip-${Date.now()}-${index + 1}`,
+      title,
+      thumbnail: typeof clip.thumbnail === "string" ? clip.thumbnail : "",
+      duration,
+      startTime,
+      endTime,
+      hook,
+      angle,
+      category,
+      viralScore,
+      quality: payload.videoQuality,
+      platform: payload.targetPlatform,
+      status: "Ready for Review",
+      sourceVideoUrl: metadata.videoUrl || payload.sourceVideoUrl,
+      caption,
+      suggestedHashtags: hashtags,
+      cta,
+      reason: stringField(clip, "reason", "rationale")
+    };
+  });
+}
+
+function parseJsonObject(output: string) {
+  const trimmed = output.trim();
+  const withoutFence = trimmed.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+
+  try {
+    return JSON.parse(withoutFence) as unknown;
+  } catch {
+    throw new Error("AI provider returned non-JSON Clip Studio output.");
+  }
+}
+
+function stringField(record: Record<string, unknown>, ...names: string[]) {
+  const value = optionalStringField(record, ...names);
+  if (value) {
+    return value;
+  }
+
+  throw new Error(`AI provider returned unsupported Clip Studio JSON format: missing ${names[0]}.`);
+}
+
+function optionalStringField(record: Record<string, unknown>, ...names: string[]) {
+  for (const name of names) {
+    const value = record[name];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return "";
+}
+
+function numberField(record: Record<string, unknown>, ...names: string[]) {
+  for (const name of names) {
+    const value = record[name];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return Math.max(0, Math.min(100, Math.round(value)));
+    }
+    if (typeof value === "string" && Number.isFinite(Number(value))) {
+      return Math.max(0, Math.min(100, Math.round(Number(value))));
+    }
+  }
+
+  throw new Error(`AI provider returned unsupported Clip Studio JSON format: missing ${names[0]}.`);
+}
+
+function arrayField(record: Record<string, unknown>, ...names: string[]) {
+  for (const name of names) {
+    const value = record[name];
+    if (Array.isArray(value)) {
+      return value.map((item) => String(item).trim()).filter(Boolean);
+    }
+  }
+
+  throw new Error(`AI provider returned unsupported Clip Studio JSON format: missing ${names[0]}.`);
+}
+
 function CampaignContent({
   activeSub,
   campaigns,
@@ -2181,7 +2330,7 @@ function CampaignContent({
     return (
       <div className="section-grid three">
         {["Content Rules", "Hashtag Rules", "CTA Rules", "Publishing Rules", "Platform Rules", "Compliance Rules"].map((title) => (
-          <InfoPanel title={title} items={["Demo Data", "Rule enabled", "AI suggestion available", "Fix button ready"]} key={title} />
+          <InfoPanel title={title} items={["Rule enabled", "AI suggestion available", "Fix button ready"]} key={title} />
         ))}
       </div>
     );
@@ -2246,13 +2395,13 @@ function ContentLibraryContent({
         <div className="category-dropdown-row">
           <label>
             <span>Category</span>
-            <select defaultValue="Demo Data">
+            <select defaultValue={categories[0]?.slug ?? "All"}>
               {categories.map((item) => (
                 <option value={item.slug} key={item.id}>{item.name}</option>
               ))}
             </select>
           </label>
-          <StatusBadge label="Demo Data" tone="blue" />
+          <StatusBadge label="REAL_API" tone="green" />
         </div>
         <p className="muted">Use the filter panel above to apply the category dropdown to the content results.</p>
       </section>
@@ -2391,7 +2540,7 @@ function SettingsContent({ activeSub }: { activeSub: SubNavItem }) {
   if (activeSub.key === "api-management") {
     return (
       <div className="section-grid two">
-        <EnvStatusPanel title="Feature Flags" description="Public environment flags for demo data, real API mode, and auto-posting." items={featureFlagEnvStatus} />
+        <EnvStatusPanel title="Feature Flags" description="Public environment flags for real API mode and auto-posting." items={featureFlagEnvStatus} />
         <InfoPanel title="API Management" items={["API keys", "Webhook", "External integrations", `App: ${environmentStatus.appName}`, `URL: ${environmentStatus.appUrl}`]} />
       </div>
     );
@@ -2519,7 +2668,7 @@ function AnalysisModal({ item, onClose }: { item: VideoOpportunity; onClose: () 
     <div className="modal-backdrop" role="dialog" aria-modal="true">
       <div className="modal-card">
         <SectionTitle title="AI Analysis" action="Close" onAction={onClose} />
-        <StatusBadge label="Demo Data" tone="blue" />
+        {item.sourceType && <StatusBadge label={item.sourceType} tone={item.sourceType === "REAL_API" ? "green" : "slate"} />}
         <h3>{item.title}</h3>
         <p>{item.analysis}</p>
         <div className="tag-cloud">
@@ -2548,12 +2697,12 @@ function AddAccountModal({
 }: {
   accountHandle: string;
   accountName: string;
-  connectionMode: "Demo Connect" | "OAuth Placeholder";
+  connectionMode: "OAuth Placeholder";
   platform: string;
   onCancel: () => void;
   onConnect: () => void;
   onHandleChange: (value: string) => void;
-  onModeChange: (value: "Demo Connect" | "OAuth Placeholder") => void;
+  onModeChange: (value: "OAuth Placeholder") => void;
   onNameChange: (value: string) => void;
   onPlatformChange: (value: string) => void;
 }) {
@@ -2580,8 +2729,7 @@ function AddAccountModal({
           </label>
           <label>
             <span>Connection mode</span>
-            <select value={connectionMode} onChange={(event) => onModeChange(event.target.value as "Demo Connect" | "OAuth Placeholder")}>
-              <option value="Demo Connect">Demo Connect</option>
+            <select value={connectionMode} onChange={(event) => onModeChange(event.target.value as "OAuth Placeholder")}>
               <option value="OAuth Placeholder">OAuth Placeholder</option>
             </select>
           </label>
@@ -2598,9 +2746,7 @@ function AddAccountModal({
 function StatsGrid() {
   return (
     <section className="stats-grid">
-      {stats.map((stat) => (
-        <StatCard stat={stat} key={stat.label} />
-      ))}
+      <EmptyState title="Analytics metrics not connected" description="Real analytics provider has not returned KPI records." />
     </section>
   );
 }
@@ -2618,7 +2764,7 @@ function InfoPanel({ title, items }: { title: string; items: string[] }) {
   return (
     <section className="section-card">
       <SectionTitle title={title} />
-      <StatusBadge label="Demo Data" tone="blue" />
+      <StatusBadge label="REAL_API" tone="green" />
       <div className="tag-cloud">
         {items.map((item, index) => (
           <StatusBadge label={item} tone={index % 3 === 0 ? "blue" : index % 3 === 1 ? "cyan" : "slate"} key={item} />
@@ -2723,7 +2869,8 @@ function normalizePath(pathname: string) {
 function readSelectedSource() {
   try {
     const value = localStorage.getItem(SELECTED_SOURCE_KEY);
-    return value ? (JSON.parse(value) as VideoOpportunity) : null;
+    const parsed = value ? (JSON.parse(value) as VideoOpportunity) : null;
+    return parsed?.sourceType === "DEMO" ? null : parsed;
   } catch {
     return null;
   }
@@ -2732,6 +2879,10 @@ function readSelectedSource() {
 function usePersistentState<T>(key: string, initialValue: T) {
   const [value, setValue] = useState<T>(() => {
     try {
+      if (!environmentStatus.demoDataEnabled && Array.isArray(initialValue) && initialValue.length === 0) {
+        return initialValue;
+      }
+
       const stored = localStorage.getItem(key);
       return stored ? (JSON.parse(stored) as T) : initialValue;
     } catch {

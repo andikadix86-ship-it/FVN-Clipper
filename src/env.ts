@@ -1,6 +1,6 @@
 import type { StatusTone } from "./types";
 
-type IntegrationStatus = "Configured" | "Missing" | "Not Connected" | "Demo Mode";
+type IntegrationStatus = "Configured" | "Missing" | "Not Connected";
 
 export interface EnvStatusItem {
   name: string;
@@ -18,8 +18,8 @@ const hasPublicValue = (key: string) => typeof env[key] === "string" && String(e
 export const environmentStatus = {
   appName: String(env.NEXT_PUBLIC_APP_NAME ?? "FVN AI Clipper"),
   appUrl: String(env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
-  demoDataEnabled: publicFlag("NEXT_PUBLIC_ENABLE_DEMO_DATA", "true") === "true",
-  realApiEnabled: publicFlag("NEXT_PUBLIC_ENABLE_REAL_API", "false") === "true",
+  demoDataEnabled: publicFlag("NEXT_PUBLIC_ENABLE_DEMO_DATA", "false") === "true",
+  realApiEnabled: publicFlag("NEXT_PUBLIC_ENABLE_REAL_API", "true") === "true",
   autoPostingEnabled: publicFlag("NEXT_PUBLIC_ENABLE_AUTO_POSTING", "false") === "true",
   appUrlConfigured: hasPublicValue("NEXT_PUBLIC_APP_URL")
 };
@@ -28,9 +28,6 @@ function statusTone(status: IntegrationStatus): StatusTone {
   if (status === "Configured") {
     return "green";
   }
-  if (status === "Demo Mode") {
-    return "blue";
-  }
   if (status === "Not Connected") {
     return "amber";
   }
@@ -38,15 +35,11 @@ function statusTone(status: IntegrationStatus): StatusTone {
 }
 
 function serverSecretStatus(): IntegrationStatus {
-  if (environmentStatus.demoDataEnabled) {
-    return "Demo Mode";
-  }
-
   if (!environmentStatus.realApiEnabled) {
     return "Not Connected";
   }
 
-  return "Missing";
+  return "Not Connected";
 }
 
 function integration(name: string, required: string[], note: string): EnvStatusItem {
@@ -77,11 +70,11 @@ export const socialIntegrationEnvStatus: EnvStatusItem[] = [
 
 export const featureFlagEnvStatus: EnvStatusItem[] = [
   {
-    name: "Demo Data",
+    name: "Manual Demo Mode",
     required: ["NEXT_PUBLIC_ENABLE_DEMO_DATA"],
-    status: environmentStatus.demoDataEnabled ? "Configured" : "Missing",
-    tone: statusTone(environmentStatus.demoDataEnabled ? "Configured" : "Missing"),
-    note: `Current value: ${environmentStatus.demoDataEnabled ? "enabled" : "disabled"}`
+    status: environmentStatus.demoDataEnabled ? "Configured" : "Not Connected",
+    tone: statusTone(environmentStatus.demoDataEnabled ? "Configured" : "Not Connected"),
+    note: `Current value: ${environmentStatus.demoDataEnabled ? "enabled manually" : "disabled"}`
   },
   {
     name: "Real API",

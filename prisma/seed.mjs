@@ -1,4 +1,11 @@
 import { PrismaClient } from "@prisma/client";
+import process from "node:process";
+
+const allowDemoSeed = process.env.APP_DATA_MODE === "demo" || process.env.ALLOW_DEMO_SEED === "true";
+
+if (!allowDemoSeed) {
+  throw new Error("Demo seed dinonaktifkan. Set APP_DATA_MODE=demo atau ALLOW_DEMO_SEED=true jika memang ingin mengisi data demo secara manual.");
+}
 
 const prisma = new PrismaClient();
 

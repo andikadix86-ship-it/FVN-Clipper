@@ -1,0 +1,6 @@
+ALTER TABLE "Category" ALTER COLUMN "sourceType" SET DEFAULT 'REAL_API';
+ALTER TABLE "Campaign" ALTER COLUMN "sourceType" SET DEFAULT 'REAL_API';
+ALTER TABLE "AiClipOpportunity" ALTER COLUMN "sourceType" SET DEFAULT 'REAL_API';
+ALTER TABLE "DashboardRecommendation" ALTER COLUMN "sourceType" SET DEFAULT 'REAL_API';
+ALTER TABLE "PublishingSchedule" ALTER COLUMN "sourceType" SET DEFAULT 'REAL_API';
+ALTER TABLE "CompetitorProfile" ALTER COLUMN "sourceType" SET DEFAULT 'REAL_API';

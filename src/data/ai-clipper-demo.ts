@@ -452,9 +452,9 @@ export const defaultContentItems: ContentItem[] = [
   { id: "content-1", title: "AI CRM in 30 seconds", category: "AI", platform: "TikTok", campaign: "AI Tools Ramadan Launch", status: "Ready", metric: "8.2 score", date: "2026-06-18", performance: "High" },
   { id: "content-2", title: "Three budget rules", category: "Finance", platform: "Instagram", campaign: "Finance Shorts Sprint", status: "Scheduled", metric: "Jun 19, 09:00", date: "2026-06-19", performance: "Medium" },
   { id: "content-3", title: "Discipline hook test", category: "Motivation", platform: "YouTube", campaign: "Motivation Evergreen", status: "Published", metric: "124K views", date: "2026-06-17", performance: "High" },
-  { id: "content-4", title: "Health myth opener", category: "Health", platform: "Facebook", campaign: "Demo Data", status: "Draft", metric: "Needs caption", date: "2026-06-20", performance: "Low" },
+  { id: "content-4", title: "Health myth opener", category: "Health", platform: "Facebook", campaign: "Unassigned", status: "Draft", metric: "Needs caption", date: "2026-06-20", performance: "Low" },
   { id: "content-5", title: "Gaming setup affiliate", category: "Affiliate", platform: "TikTok", campaign: "Affiliate Product Clips", status: "Ready", metric: "CTA valid", date: "2026-06-21", performance: "Medium" },
-  { id: "content-6", title: "Learning AI basics", category: "Education", platform: "LinkedIn", campaign: "Demo Data", status: "Archived", metric: "Archived", date: "2026-06-12", performance: "Low" }
+  { id: "content-6", title: "Learning AI basics", category: "Education", platform: "LinkedIn", campaign: "Unassigned", status: "Archived", metric: "Archived", date: "2026-06-12", performance: "Low" }
 ];
 
 export const defaultAccounts: Account[] = [
@@ -491,7 +491,7 @@ export const recommendations: AIRecommendation[] = [
     title: "AI Recommendation For You",
     description: "Prioritize AI & Technology clips today. Best posting window is 19:00 to 21:00 Asia/Jakarta.",
     action: "Apply Recommendation",
-    status: "Demo Data"
+    status: "Real Data"
   },
   {
     title: "Integration Reminder",
@@ -512,6 +512,6 @@ export const chartData = [
 ];
 
 export const analyticsMetrics = ["Total views", "Watch time", "Followers", "Engagement", "Growth"];
-export const categories = ["Demo Data", "Business", "Finance", "Education", "AI", "Islamic", "Motivation", "Gaming", "Health", "Affiliate"];
+export const categories = ["Business", "Finance", "Education", "AI", "Islamic", "Motivation", "Gaming", "Health", "Affiliate"];
 export const niches = ["Business", "Finance", "Education", "AI & Technology", "Motivation", "Islamic", "Health", "Gaming", "Affiliate", "News", "Custom Niche"];
 export const platforms = ["YouTube", "TikTok", "Instagram", "Facebook", "X", "LinkedIn"];

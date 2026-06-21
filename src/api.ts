@@ -1,6 +1,7 @@
 import type { Campaign, ScheduleItem, VideoOpportunity } from "./types";
 
 export type SourceType = "DEMO" | "MANUAL" | "CSV_IMPORT" | "REAL_API";
+export type ApiConnectionState = "CONNECTED" | "NOT_CONNECTED" | "FAILED" | "UNSUPPORTED";
 export type ApiStatus = "DRAFT" | "READY" | "SCHEDULED" | "PUBLISHED" | "FAILED" | "PAUSED";
 export type ApiPlatform = "ALL" | "YOUTUBE" | "TIKTOK" | "INSTAGRAM" | "FACEBOOK";
 export type ApiPerformance = "HIGH" | "MEDIUM" | "LOW";
@@ -133,8 +134,29 @@ export interface ApiAiGenerateResult {
   model: string;
   fallbackUsed: boolean;
 }
+
+export interface ApiConnectionCheck {
+  id: string;
+  label: string;
+  provider: string;
+  kind: "database" | "ai" | "video_source" | "social" | "marketplace";
+  status: ApiConnectionState;
+  sourceType: "REAL_API";
+  technicalReason: string;
+  checkedAt: string;
+  latencyMs?: number;
+}
+
+export interface ApiConnectionStatus {
+  mode: "REAL";
+  sourceType: "REAL_API";
+  generatedAt: string;
+  checks: ApiConnectionCheck[];
+  totals: Record<ApiConnectionState, number>;
+}
+
 export interface DashboardOverviewData {
-  mode?: "DEMO";
+  mode?: "REAL" | "DEMO";
   sourceType?: SourceType;
   insights?: {
     engagementRate: string;
@@ -175,14 +197,20 @@ export async function fetchApiData<T>(path: string, init: RequestInit = {}): Pro
     throw new Error(`API returned non-JSON response for ${path}. Check Vite proxy or backend server. Preview: ${text.slice(0, 120)}`);
   }
 
-  const payload = (await response.json()) as { data: T; error?: string | null; success?: boolean; mode?: "DEMO"; sourceType?: SourceType };
+  const payload = (await response.json()) as {
+    data: T;
+    error?: string | null;
+    success?: boolean;
+    code?: string;
+    status?: ApiConnectionState;
+    technicalReason?: string;
+  };
 
   if (!response.ok || payload.success === false || payload.error) {
-    throw new Error(payload.error || `Request failed: ${response.status}`);
-  }
-
-  if (payload.mode === "DEMO" && payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) {
-    return { ...payload.data, mode: payload.mode, sourceType: payload.sourceType ?? "DEMO" } as T;
+    const technicalReason = payload.technicalReason ? ` ${payload.technicalReason}` : "";
+    const status = payload.status ? `${payload.status}: ` : "";
+    const code = payload.code ? `[${payload.code}] ` : "";
+    throw new Error(`${status}${code}${payload.error || `Request failed: ${response.status}`}${technicalReason}`.trim());
   }
 
   return payload.data;
@@ -192,7 +220,7 @@ export function buildOpportunityUrl(query: OpportunityQuery = {}) {
   const params = new URLSearchParams();
 
   Object.entries(query).forEach(([key, value]) => {
-    if (value === undefined || value === null || value === "" || value === "All" || value === "Demo Data") {
+    if (value === undefined || value === null || value === "" || value === "All") {
       return;
     }
     params.set(key, String(value));

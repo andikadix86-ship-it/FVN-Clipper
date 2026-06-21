@@ -1,16 +1,18 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { loadEnvFile } from "node:process";
-import { URL } from "node:url";
+import { fileURLToPath, URL } from "node:url";
+import { getHttpStatus, sanitizeSecret, toApiErrorPayload } from "../src/modules/http/api-error";
 
 try {
-  loadEnvFile();
-} catch {
-  // Missing .env is handled by the Prisma fallback and returned as JSON.
+  loadEnvFile(fileURLToPath(new URL("../.env", import.meta.url)));
+} catch (error) {
+  console.warn(`[FVN API env] ENV belum terbaca dari project root: ${sanitizeSecret(error instanceof Error ? error.message : "unknown error")}`);
 }
 
 const { getCategories, getCompetitors, getOpportunities, setOpportunitySaved } = await import("../src/modules/ai-clip-intelligence/ai-clip-service");
 const { generateAiFeatureContent } = await import("../src/modules/ai/ai-feature-service");
 const { getAiProviderPublicStatus } = await import("../src/modules/ai/ai-provider");
+const { getConnectionStatus } = await import("../src/modules/connections/connection-status");
 const { getDashboardCampaigns, getDashboardOverview, getDashboardRecommendations, getPublishingCalendar } = await import("../src/modules/dashboard/dashboard-service");
 
 const PORT = Number(process.env.API_PORT ?? 3001);
@@ -46,6 +48,11 @@ async function routeRequest(request: IncomingMessage, response: ServerResponse) 
 
   if (method === "GET" && pathname === "/api/ai/provider/status") {
     sendData(response, getAiProviderPublicStatus());
+    return;
+  }
+
+  if (method === "GET" && pathname === "/api/connections/status") {
+    sendData(response, await getConnectionStatus());
     return;
   }
 
@@ -150,11 +157,6 @@ function sendData(response: ServerResponse, data: unknown, message?: string) {
     data
   };
 
-  if (isDemoData(data)) {
-    body.mode = "DEMO";
-    body.sourceType = "DEMO";
-  }
-
   if (message) {
     body.message = message;
   }
@@ -162,24 +164,10 @@ function sendData(response: ServerResponse, data: unknown, message?: string) {
   sendJson(response, body);
 }
 
-function isDemoData(data: unknown): boolean {
-  if (Array.isArray(data)) {
-    return data.some((item) => isDemoData(item));
-  }
-
-  if (data && typeof data === "object") {
-    const record = data as Record<string, unknown>;
-    return record.sourceType === "DEMO" || record.mode === "DEMO";
-  }
-
-  return false;
-}
-
 function sendError(response: ServerResponse, error: unknown) {
-  const message = error instanceof Error ? error.message : "Unexpected API error";
-  const errorStatus = (error as { statusCode?: unknown } | null)?.statusCode;
-  const status = typeof errorStatus === "number" ? errorStatus : message.includes("Database belum dikonfigurasi") ? 503 : 500;
-  sendJson(response, { success: false, data: null, error: message }, status);
+  const payload = toApiErrorPayload(error);
+  console.error(`[FVN API error] ${payload.status} ${payload.code}: ${sanitizeSecret(payload.technicalReason)}`);
+  sendJson(response, payload, getHttpStatus(error));
 }
 
 async function readJsonBody(request: IncomingMessage): Promise<JsonBody> {
