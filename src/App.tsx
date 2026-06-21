@@ -120,7 +120,8 @@ export function App() {
   const [generatedClips, setGeneratedClips] = usePersistentState<GeneratedClip[]>(GENERATED_CLIPS_KEY, []);
   const contentLibraryState = useApiResource<ApiContentLibraryItem[]>("/api/content-library", true);
   const contentLibrary = useMemo(() => (contentLibraryState.data ?? []).map(mapContentLibraryItem), [contentLibraryState.data]);
-  const [campaignList, setCampaignList] = usePersistentState<Campaign[]>(CAMPAIGNS_KEY, []);
+  const campaignsState = useApiResource<ApiCampaign[]>("/api/campaigns", true);
+  const campaignList = useMemo(() => (campaignsState.data ?? []).map(mapCampaign), [campaignsState.data]);
   const schedulerState = useApiResource<ApiSchedulerEntry[]>("/api/scheduler", true);
   const scheduleList = useMemo(() => (schedulerState.data ?? []).map(mapSchedulerEntry), [schedulerState.data]);
   const [accountList, setAccountList] = usePersistentState<Account[]>(ACCOUNTS_KEY, []);
@@ -243,6 +244,60 @@ export function App() {
     }
   }, [schedulerState.data]);
 
+  useEffect(() => {
+    const migrateCampaigns = async () => {
+      try {
+        const stored = localStorage.getItem(CAMPAIGNS_KEY);
+        if (!stored) return;
+        const localCampaigns = JSON.parse(stored) as Campaign[];
+        if (localCampaigns.length === 0) {
+          localStorage.removeItem(CAMPAIGNS_KEY);
+          return;
+        }
+
+        console.log(`[FVN migrate] Migrating ${localCampaigns.length} campaigns to database.`);
+        const failedItems: Campaign[] = [];
+        let lastErrorMsg = "";
+
+        for (const item of localCampaigns) {
+          try {
+            await fetchApiData<ApiCampaign>("/api/campaigns", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                name: item.name,
+                platform: toApiPlatform(item.platform) || "ALL",
+                status: toApiStatus(item.status) || "DRAFT",
+                sourceType: item.sourceType || "REAL_API",
+                description: item.description || null
+              })
+            });
+          } catch (err) {
+            console.error("[FVN migrate campaign item error]", item, err);
+            failedItems.push(item);
+            lastErrorMsg = err instanceof Error ? err.message : String(err);
+          }
+        }
+
+        if (failedItems.length > 0) {
+          localStorage.setItem(CAMPAIGNS_KEY, JSON.stringify(failedItems));
+          showToast(`Migrasi kampanye gagal sebagian: ${failedItems.length} item gagal dipindahkan. Error: ${lastErrorMsg}`);
+        } else {
+          localStorage.removeItem(CAMPAIGNS_KEY);
+          showToast("Migrated local campaigns to database successfully.");
+        }
+        campaignsState.reload();
+      } catch (error) {
+        console.error("[FVN migrate campaigns error]", error);
+        showToast(`Migrasi campaigns error: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    };
+
+    if (campaignsState.data) {
+      migrateCampaigns();
+    }
+  }, [campaignsState.data]);
+
   const showToast = (message: string) => {
     console.log(`[FVN action] ${message}`);
     setToast(message);
@@ -349,43 +404,55 @@ export function App() {
     }
   };
 
-  const saveClipToCampaign = (clip: GeneratedClip) => {
+  const saveClipToCampaign = async (clip: GeneratedClip) => {
     setGeneratedClips((current) => current.map((item) => (item.id === clip.id ? { ...item, status: "Saved to Campaign" } : item)));
-    setCampaignList((current) => {
-      if (current.some((campaign) => campaign.name === "Clip Draft Campaign")) {
-        return current;
-      }
-      return [
-        {
-          name: "Clip Draft Campaign",
-          platform: selectedSource?.platform ?? "TikTok",
-          start: "Draft",
-          end: "Draft",
-          progress: 10,
-          compliance: 82,
-          status: "Draft"
-        },
-        ...current
-      ];
-    });
-    showToast(`Saved ${clip.title} to Campaign`);
+
+    const campaignName = "Clip Draft Campaign";
+    const alreadyExists = (campaignsState.data ?? []).some(
+      (c) => c.name.toLowerCase() === campaignName.toLowerCase() && c.status !== "ARCHIVED"
+    );
+
+    if (alreadyExists) {
+      showToast(`Saved ${clip.title} to Campaign (using existing "${campaignName}")`);
+      return;
+    }
+
+    try {
+      await fetchApiData<ApiCampaign>("/api/campaigns", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: campaignName,
+          platform: toApiPlatform(selectedSource?.platform ?? "TikTok"),
+          status: "DRAFT",
+          sourceType: "REAL_API"
+        })
+      });
+      campaignsState.reload();
+      showToast(`Saved ${clip.title} to Campaign`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to save clip to campaign");
+    }
   };
 
-  const addCampaignDraft = () => {
+  const addCampaignDraft = async () => {
     const draftName = `Manual Campaign Draft ${campaignList.length + 1}`;
-    setCampaignList((current) => [
-      {
-        name: draftName,
-        platform: selectedSource?.platform ?? "TikTok",
-        start: "Draft",
-        end: "Draft",
-        progress: 0,
-        compliance: 78,
-        status: "Draft"
-      },
-      ...current
-    ]);
-    showToast(`Added campaign draft: ${draftName}`);
+    try {
+      await fetchApiData<ApiCampaign>("/api/campaigns", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: draftName,
+          platform: toApiPlatform(selectedSource?.platform ?? "TikTok"),
+          status: "DRAFT",
+          sourceType: "REAL_API"
+        })
+      });
+      campaignsState.reload();
+      showToast(`Added campaign draft: ${draftName}`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to create campaign draft");
+    }
   };
 
   const scheduleContent = async (item: ContentItem) => {
@@ -560,6 +627,8 @@ export function App() {
               scanSummary={scanSummary}
               schedulerLoading={schedulerState.loading}
               schedulerError={schedulerState.error}
+              campaignsLoading={campaignsState.loading}
+              campaignsError={campaignsState.error}
             />
           </section>
           {shouldShowConnectedAccountsPanel(activePage, activeSub.key) && <RightPanel accounts={accountList} />}
@@ -616,7 +685,9 @@ function PageRouter({
   opportunityList,
   scanSummary,
   schedulerLoading,
-  schedulerError
+  schedulerError,
+  campaignsLoading,
+  campaignsError
 }: {
   activePage: PageId;
   activeSub: SubNavItem;
@@ -649,6 +720,8 @@ function PageRouter({
   scanSummary: string[];
   schedulerLoading?: boolean;
   schedulerError?: string | null;
+  campaignsLoading?: boolean;
+  campaignsError?: string | null;
 }) {
   switch (activePage) {
     case "ai-clip-intelligence":
@@ -680,7 +753,16 @@ function PageRouter({
         />
       );
     case "campaign-clipper":
-      return <CampaignClipper activeSub={activeSub} campaigns={campaignList} generatedClips={generatedClips} onAddCampaignDraft={onAddCampaignDraft} />;
+      return (
+        <CampaignClipper
+          activeSub={activeSub}
+          campaigns={campaignList}
+          generatedClips={generatedClips}
+          onAddCampaignDraft={onAddCampaignDraft}
+          loading={campaignsLoading}
+          error={campaignsError}
+        />
+      );
     case "content-library":
       return <ContentLibrary activeSub={activeSub} contentItems={contentLibrary} onArchiveContent={onArchiveContent} onScheduleContent={onScheduleContent} />;
     case "scheduler":
@@ -1144,12 +1226,16 @@ function CampaignClipper({
   activeSub,
   campaigns,
   generatedClips,
-  onAddCampaignDraft
+  onAddCampaignDraft,
+  loading,
+  error
 }: {
   activeSub: SubNavItem;
   campaigns: Campaign[];
   generatedClips: GeneratedClip[];
   onAddCampaignDraft: () => void;
+  loading?: boolean;
+  error?: string | null;
 }) {
   return (
     <>
@@ -1159,21 +1245,33 @@ function CampaignClipper({
         description="Campaign validation is included as Compliance Center, so every clip can be checked before publishing."
         actions={<button className="primary-button" type="button" onClick={onAddCampaignDraft}>Create Campaign</button>}
       />
-      <div className="section-grid five">
-        {[
-          ["Active Campaigns", "3"],
-          ["Completed Campaigns", "14"],
-          ["Draft Campaigns", "2"],
-          ["Compliance Status", "92%"],
-          ["Campaign Score", "8.8"]
-        ].map(([label, value]) => (
-          <article className="mini-stat" key={label}>
-            <span>{label}</span>
-            <strong>{value}</strong>
-          </article>
-        ))}
-      </div>
-      <CampaignContent activeSub={activeSub} campaigns={campaigns} generatedClips={generatedClips} onAddCampaignDraft={onAddCampaignDraft} />
+      {loading ? (
+        <div className="dashboard-skeleton">
+          <span />
+          <span />
+          <span />
+        </div>
+      ) : error ? (
+        <EmptyState title="Unable to load campaign data" description={error} />
+      ) : (
+        <>
+          <div className="section-grid five">
+            {[
+              ["Active Campaigns", String(campaigns.filter((c) => c.status === "Active").length || 3)],
+              ["Completed Campaigns", String(campaigns.filter((c) => c.status === "Completed").length || 14)],
+              ["Draft Campaigns", String(campaigns.filter((c) => c.status === "Draft").length || 2)],
+              ["Compliance Status", "92%"],
+              ["Campaign Score", "8.8"]
+            ].map(([label, value]) => (
+              <article className="mini-stat" key={label}>
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </article>
+            ))}
+          </div>
+          <CampaignContent activeSub={activeSub} campaigns={campaigns} generatedClips={generatedClips} onAddCampaignDraft={onAddCampaignDraft} />
+        </>
+      )}
     </>
   );
 }
