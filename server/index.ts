@@ -12,7 +12,7 @@ if (envLoadResult.error && !existsSync(PROJECT_ENV_PATH)) {
   console.warn(`[FVN API env] ENV belum terbaca dari project root: ${sanitizeSecret(envLoadResult.error.message)}`);
 }
 
-const { getCategories, getCompetitors, getOpportunities, setOpportunitySaved } = await import("../src/modules/ai-clip-intelligence/ai-clip-service");
+const { getCategories, getCompetitors, getOpportunities, scanYouTubeOpportunities, setOpportunitySaved } = await import("../src/modules/ai-clip-intelligence/ai-clip-service");
 const { generateAiFeatureContent } = await import("../src/modules/ai/ai-feature-service");
 const { getAiProviderPublicStatus } = await import("../src/modules/ai/ai-provider");
 const { getConnectionStatus } = await import("../src/modules/connections/connection-status");
@@ -99,6 +99,11 @@ async function routeRequest(request: IncomingMessage, response: ServerResponse) 
     return;
   }
 
+  if (method === "POST" && pathname === "/api/ai-clip-intelligence/scan") {
+    const body = await readJsonBody(request);
+    sendData(response, await scanYouTubeOpportunities(body));
+    return;
+  }
   if (method === "GET" && pathname === "/api/ai-clip-intelligence/opportunities") {
     sendData(
       response,
@@ -200,3 +205,4 @@ function logSafeEnvStatus() {
 
   console.log(`[FVN API env] ENV loaded: ${envStatus}`);
 }
+

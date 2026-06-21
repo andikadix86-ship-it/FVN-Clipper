@@ -62,6 +62,11 @@ export function toApiErrorPayload(error: unknown): ApiErrorPayload {
     };
   }
 
+  const schemaError = classifyDatabaseSchemaError(error);
+  if (schemaError) {
+    return schemaError;
+  }
+
   const attempts = (error as { attempts?: Array<{ reason?: string; provider?: string }> } | null)?.attempts;
   const statusCode = (error as { statusCode?: unknown } | null)?.statusCode;
   if (statusCode === 503 && attempts?.length) {
@@ -91,6 +96,10 @@ export function toApiErrorPayload(error: unknown): ApiErrorPayload {
 export function getHttpStatus(error: unknown) {
   if (error instanceof ApiConnectionError) {
     return error.statusCode;
+  }
+
+  if (classifyDatabaseSchemaError(error)) {
+    return 503;
   }
 
   const errorStatus = (error as { statusCode?: unknown; status?: unknown } | null)?.statusCode ?? (error as { status?: unknown } | null)?.status;
@@ -188,12 +197,48 @@ export function sanitizeSecret(value: string) {
     .replace(/[A-Za-z0-9_\-.]{32,}/g, "[redacted]");
 }
 
+function classifyDatabaseSchemaError(error: unknown): ApiErrorPayload | null {
+  const rawMessage = error instanceof Error ? error.message : String((error as { message?: unknown } | null)?.message ?? "");
+  const code = getErrorCode(error);
+  const safeMessage = sanitizeSecret(rawMessage);
+  const lower = safeMessage.toLowerCase();
+  const isMissingTable =
+    code === "P2021" ||
+    code === "42P01" ||
+    lower.includes("the table") && lower.includes("does not exist") ||
+    lower.includes("relation") && lower.includes("does not exist") ||
+    REQUIRED_DATABASE_TABLES.some((table) => lower.includes(`public.${table.toLowerCase()}`) && lower.includes("does not exist"));
+
+  if (!isMissingTable) {
+    return null;
+  }
+
+  return {
+    success: false,
+    data: null,
+    error: "required tables not found.",
+    code: "DATABASE_SCHEMA_MISSING",
+    status: "FAILED",
+    technicalReason: safeMessage || "Required dashboard and AI Clip Intelligence tables were not found.",
+    provider: "database"
+  };
+}
+
 function getNumericStatus(error: unknown) {
   const status = (error as { status?: unknown; statusCode?: unknown; code?: unknown } | null)?.status ?? (error as { statusCode?: unknown } | null)?.statusCode;
   if (typeof status === "number") {
     return status;
   }
   return undefined;
+}
+
+function getErrorCode(error: unknown) {
+  const code =
+    (error as { code?: unknown } | null)?.code ??
+    (error as { meta?: { code?: unknown } } | null)?.meta?.code ??
+    (error as { cause?: { code?: unknown } } | null)?.cause?.code;
+
+  return typeof code === "string" ? code : undefined;
 }
 
 function getKnownSecrets() {
@@ -203,3 +248,12 @@ function getKnownSecrets() {
     .filter(([key, value]) => /KEY|TOKEN|SECRET|PASSWORD|DATABASE_URL|DIRECT_URL/i.test(key) && typeof value === "string" && value.length >= 8)
     .map(([, value]) => value as string);
 }
+
+const REQUIRED_DATABASE_TABLES = [
+  "Category",
+  "Campaign",
+  "AiClipOpportunity",
+  "DashboardRecommendation",
+  "PublishingSchedule",
+  "CompetitorProfile"
+];
