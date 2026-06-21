@@ -1,8 +1,8 @@
-import type { Campaign, ScheduleItem, VideoOpportunity } from "./types";
+import type { Campaign, ContentItem, ScheduleItem, VideoOpportunity } from "./types";
 
 export type SourceType = "DEMO" | "MANUAL" | "CSV_IMPORT" | "REAL_API";
 export type ApiConnectionState = "CONNECTED" | "NOT_CONNECTED" | "FAILED" | "UNSUPPORTED";
-export type ApiStatus = "DRAFT" | "READY" | "SCHEDULED" | "PUBLISHED" | "FAILED" | "PAUSED";
+export type ApiStatus = "DRAFT" | "READY" | "SCHEDULED" | "PUBLISHED" | "FAILED" | "PAUSED" | "ARCHIVED" | "POSTED" | "REVIEW" | "APPROVED" | "REJECTED";
 export type ApiPlatform = "ALL" | "YOUTUBE" | "TIKTOK" | "INSTAGRAM" | "FACEBOOK";
 export type ApiPerformance = "HIGH" | "MEDIUM" | "LOW";
 
@@ -101,6 +101,19 @@ export interface ApiCompetitor {
   contentPattern?: unknown;
   strengths?: unknown;
   weaknesses?: unknown;
+  sourceType: SourceType;
+}
+
+export interface ApiContentLibraryItem {
+  id: string;
+  title: string;
+  category: string;
+  platform: ApiPlatform;
+  campaign: string;
+  status: ApiStatus;
+  metric?: string | null;
+  date?: string | null;
+  performance: ApiPerformance;
   sourceType: SourceType;
 }
 
@@ -294,6 +307,40 @@ export function mapSchedule(item: ApiPublishingSchedule): ScheduleItem {
   };
 }
 
+export function mapContentLibraryItem(item: ApiContentLibraryItem): ContentItem {
+  const statusMap: Record<ApiStatus, ContentItem["status"]> = {
+    DRAFT: "Draft",
+    READY: "Ready",
+    SCHEDULED: "Scheduled",
+    PUBLISHED: "Published",
+    FAILED: "Failed",
+    PAUSED: "Ready",
+    ARCHIVED: "Archived",
+    REVIEW: "Ready",
+    APPROVED: "Ready",
+    REJECTED: "Ready",
+    POSTED: "Published"
+  };
+
+  const performanceMap: Record<ApiPerformance, ContentItem["performance"]> = {
+    HIGH: "High",
+    MEDIUM: "Medium",
+    LOW: "Low"
+  };
+
+  return {
+    id: item.id,
+    title: item.title,
+    category: item.category,
+    platform: formatEnumLabel(item.platform),
+    campaign: item.campaign,
+    status: statusMap[item.status] ?? "Ready",
+    metric: item.metric ?? "",
+    date: item.date ?? undefined,
+    performance: performanceMap[item.performance] ?? "Medium"
+  };
+}
+
 export function formatEnumLabel(value: string) {
   return value
     .toLowerCase()
@@ -309,7 +356,12 @@ export function mapStatus(status: ApiStatus): VideoOpportunity["status"] {
     SCHEDULED: "Scheduled",
     PUBLISHED: "Published",
     FAILED: "Failed",
-    PAUSED: "Paused"
+    PAUSED: "Paused",
+    ARCHIVED: "New",
+    POSTED: "Published",
+    REVIEW: "New",
+    APPROVED: "New",
+    REJECTED: "New"
   };
 
   return map[status];
@@ -334,7 +386,12 @@ function mapCampaignStatus(status: ApiStatus): Campaign["status"] {
     SCHEDULED: "Scheduled",
     PUBLISHED: "Published",
     FAILED: "Failed",
-    PAUSED: "Paused"
+    PAUSED: "Paused",
+    ARCHIVED: "Draft",
+    POSTED: "Published",
+    REVIEW: "Draft",
+    APPROVED: "Draft",
+    REJECTED: "Draft"
   };
 
   return map[status];
@@ -347,7 +404,12 @@ function mapScheduleStatus(status: ApiStatus): ScheduleItem["status"] {
     SCHEDULED: "Scheduled",
     PUBLISHED: "Published",
     FAILED: "Failed",
-    PAUSED: "Paused"
+    PAUSED: "Paused",
+    ARCHIVED: "Draft",
+    POSTED: "Published",
+    REVIEW: "Draft",
+    APPROVED: "Draft",
+    REJECTED: "Draft"
   };
 
   return map[status];

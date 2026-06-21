@@ -52,7 +52,9 @@ import {
   type ApiPublishingSchedule,
   type ApiRecommendation,
   type DashboardOverviewData,
-  type OpportunityQuery
+  type OpportunityQuery,
+  type ApiContentLibraryItem,
+  mapContentLibraryItem
 } from "./api";
 import {
   DEFAULT_CLIP_COUNT,
@@ -114,7 +116,8 @@ export function App() {
   const [selectedSource, setSelectedSource] = useState<VideoOpportunity | null>(() => readSelectedSource());
   const [savedOpportunities, setSavedOpportunities] = usePersistentState<VideoOpportunity[]>(SAVED_OPPORTUNITIES_KEY, []);
   const [generatedClips, setGeneratedClips] = usePersistentState<GeneratedClip[]>(GENERATED_CLIPS_KEY, []);
-  const [contentLibrary, setContentLibrary] = usePersistentState<ContentItem[]>(CONTENT_ITEMS_KEY, []);
+  const contentLibraryState = useApiResource<ApiContentLibraryItem[]>("/api/content-library", true);
+  const contentLibrary = useMemo(() => (contentLibraryState.data ?? []).map(mapContentLibraryItem), [contentLibraryState.data]);
   const [campaignList, setCampaignList] = usePersistentState<Campaign[]>(CAMPAIGNS_KEY, []);
   const [scheduleList, setScheduleList] = usePersistentState<ScheduleItem[]>(SCHEDULES_KEY, []);
   const [accountList, setAccountList] = usePersistentState<Account[]>(ACCOUNTS_KEY, []);
@@ -143,6 +146,44 @@ export function App() {
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
+
+  useEffect(() => {
+    const migrateLocalItems = async () => {
+      try {
+        const stored = localStorage.getItem(CONTENT_ITEMS_KEY);
+        if (!stored) return;
+        const localItems = JSON.parse(stored) as ContentItem[];
+        if (localItems.length === 0) return;
+
+        console.log(`[FVN migrate] Migrating ${localItems.length} Content Library items to database.`);
+        for (const item of localItems) {
+          await fetchApiData<ApiContentLibraryItem>("/api/content-library", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              title: item.title,
+              category: item.category,
+              platform: toApiPlatform(item.platform),
+              campaign: item.campaign || "Unassigned",
+              status: toApiStatus(item.status),
+              metric: item.metric,
+              date: item.date,
+              performance: toApiPerformance(item.performance || "Medium")
+            })
+          });
+        }
+        localStorage.setItem(CONTENT_ITEMS_KEY, JSON.stringify([]));
+        contentLibraryState.reload();
+        showToast("Migrated local Content Library items to database.");
+      } catch (error) {
+        console.error("[FVN migrate error]", error);
+      }
+    };
+
+    if (contentLibraryState.data) {
+      migrateLocalItems();
+    }
+  }, [contentLibraryState.data]);
 
   const showToast = (message: string) => {
     console.log(`[FVN action] ${message}`);
@@ -226,28 +267,28 @@ export function App() {
     showToast("Use Source Video to generate clips through the configured AI provider.");
   };
 
-  const saveClipToLibrary = (clip: GeneratedClip) => {
+  const saveClipToLibrary = async (clip: GeneratedClip) => {
     setGeneratedClips((current) => current.map((item) => (item.id === clip.id ? { ...item, status: "Saved to Library" } : item)));
-    setContentLibrary((current) => {
-      if (current.some((item) => item.id === `library-${clip.id}`)) {
-        return current;
-      }
-      return [
-        {
-          id: `library-${clip.id}`,
+    try {
+      await fetchApiData<ApiContentLibraryItem>("/api/content-library", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
           title: clip.title,
           category: selectedSource?.niche ?? "AI",
-          platform: selectedSource?.platform ?? "TikTok",
+          platform: toApiPlatform(selectedSource?.platform ?? "TikTok"),
           campaign: selectedSource?.campaignSlug ?? "Unassigned",
-          status: "Ready",
+          status: "READY",
           metric: `${clip.viralScore} viral score`,
           date: "2026-06-18",
-          performance: clip.viralScore >= 88 ? "High" : "Medium"
-        },
-        ...current
-      ];
-    });
-    showToast(`Saved ${clip.title} to Content Library`);
+          performance: clip.viralScore >= 88 ? "HIGH" : "MEDIUM"
+        })
+      });
+      contentLibraryState.reload();
+      showToast(`Saved ${clip.title} to Content Library`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to save clip to library");
+    }
   };
 
   const saveClipToCampaign = (clip: GeneratedClip) => {
@@ -289,7 +330,7 @@ export function App() {
     showToast(`Added campaign draft: ${draftName}`);
   };
 
-  const scheduleContent = (item: ContentItem) => {
+  const scheduleContent = async (item: ContentItem) => {
     const schedule: ScheduleItem = {
       id: `schedule-${Date.now()}`,
       title: item.title,
@@ -300,13 +341,41 @@ export function App() {
       status: "Scheduled"
     };
     setScheduleList((current) => [schedule, ...current]);
-    setContentLibrary((current) => current.map((content) => (content.title === item.title ? { ...content, status: "Scheduled", metric: `${schedule.day} ${schedule.time}` } : content)));
-    showToast(`Scheduled ${item.title}`);
+
+    if (item.id) {
+      try {
+        await fetchApiData<ApiContentLibraryItem>(`/api/content-library/${item.id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            status: "SCHEDULED",
+            metric: `${schedule.day} ${schedule.time}`
+          })
+        });
+        contentLibraryState.reload();
+        showToast(`Scheduled ${item.title}`);
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "Failed to schedule content");
+      }
+    } else {
+      showToast(`Scheduled (Local): ${item.title}`);
+    }
   };
 
-  const archiveContent = (item: ContentItem) => {
-    setContentLibrary((current) => current.map((content) => (content.title === item.title ? { ...content, status: "Archived", metric: "Archived" } : content)));
-    showToast(`Archived ${item.title}`);
+  const archiveContent = async (item: ContentItem) => {
+    if (item.id) {
+      try {
+        await fetchApiData<ApiContentLibraryItem>(`/api/content-library/${item.id}`, {
+          method: "DELETE"
+        });
+        contentLibraryState.reload();
+        showToast(`Archived ${item.title}`);
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "Failed to archive content");
+      }
+    } else {
+      showToast(`Archived (Local): ${item.title}`);
+    }
   };
 
   const toggleAccount = (account: Account) => {
