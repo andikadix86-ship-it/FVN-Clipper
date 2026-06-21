@@ -186,22 +186,39 @@ export function App() {
     showToast(`Analyzed opportunity: ${item.title}`);
   };
 
-  const runAIScan = () => {
+  const runAIScan = async () => {
     setIsScanning(true);
-    setTimeout(() => {
-      const sorted = [...opportunityList].sort((a, b) => b.clippingScore - a.clippingScore);
-      const average = sorted.length ? Math.round(sorted.reduce((total, item) => total + item.clippingScore, 0) / sorted.length) : 0;
-      setOpportunityList(sorted);
+    try {
+      const result = await fetchApiData<{
+        received: number;
+        saved: number;
+        opportunities: ApiOpportunity[];
+      }>("/api/ai-clip-intelligence/scan", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({})
+      });
+
+      const average = result.opportunities.length
+        ? Math.round(result.opportunities.reduce((total, item) => total + item.opportunityScore, 0) / result.opportunities.length)
+        : 0;
+
       setLastScanned(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
       setScanSummary([
-        `New opportunities found: ${sorted.length}`,
-        `Best niche: ${sorted[0]?.niche ?? "NOT_CONNECTED"}`,
-        `Best platform: ${sorted[0]?.platform ?? "NOT_CONNECTED"}`,
+        `New opportunities found: ${result.saved}`,
+        `Best niche: ${result.opportunities[0]?.niche ?? "NOT_CONNECTED"}`,
+        `Best platform: ${result.opportunities[0]?.platform ?? "NOT_CONNECTED"}`,
         `Average clipping score: ${average}`
       ]);
+
+      showToast(`AI scan completed: ${result.saved} new opportunities saved.`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to run AI scan";
+      showToast(`Scan Error: ${msg}`);
+      throw error;
+    } finally {
       setIsScanning(false);
-      showToast("AI scan completed");
-    }, 900);
+    }
   };
 
   const generateRealClips = () => {
@@ -759,13 +776,22 @@ function AIClipIntelligence({
     opportunityState.reload();
   };
 
+  const handleRunAIScan = async () => {
+    try {
+      await onRunAIScan();
+      opportunityState.reload();
+    } catch (error) {
+      // Error handled by onRunAIScan toast
+    }
+  };
+
   return (
     <>
       <PageHeader
         eyebrow="AI Clip Intelligence"
         title={activeSub.label}
         description="The intelligence hub for trends, niches, competitors, advisor insights, and short-form video opportunity scoring."
-        actions={<button className="primary-button" type="button" onClick={onRunAIScan}>{isScanning ? "Scanning..." : "AI Scan"}</button>}
+        actions={<button className="primary-button" type="button" onClick={handleRunAIScan} disabled={isScanning}>{isScanning ? "Scanning..." : "AI Scan"}</button>}
       />
       {activeSub.key !== "competitor-intelligence" && activeSub.key !== "ai-advisor" && (
         <OpportunityFilterPanel
